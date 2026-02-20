@@ -28,3 +28,32 @@ class Candidate(BaseModel):
     location: str
     source: str
     discovered_via: str
+
+
+from datetime import datetime
+from typing import Any, Dict, Optional
+from pydantic import BaseModel, Field
+
+
+class EventType(str, Enum):
+    CANDIDATE_INGESTED = "candidate_ingested"
+    QUALIFICATION_COMPUTED = "qualification_computed"
+    OUTREACH_DRAFTED = "outreach_drafted"
+    PACKET_BUILT = "packet_built"
+    COMPLIANCE_CHECKED = "compliance_checked"
+    PROPOSAL_CREATED = "proposal_created"
+    HUMAN_DECISION = "human_decision"
+    OUTBOX_CREATED = "outbox_created"
+    OUTBOX_SENT = "outbox_sent"
+    ERROR_RECORDED = "error_recorded"
+
+
+class LedgerEvent(BaseModel):
+    event_id: str
+    event_type: EventType
+    correlation_id: str
+    entity_id: str  # e.g., stable id for a company/candidate
+    ts: datetime = Field(default_factory=datetime.utcnow)
+    payload: Dict[str, Any]
+    prev_hash: Optional[str] = None
+    hash: Optional[str] = None
