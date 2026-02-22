@@ -57,3 +57,21 @@ class LedgerEvent(BaseModel):
     payload: Dict[str, Any]
     prev_hash: Optional[str] = None
     hash: Optional[str] = None
+
+from typing import Literal, Optional
+
+Segment = Literal[
+    "industrial_distributor",
+    "regional_building_supplier",
+    "concrete_contractor_large",
+    "modular_manufacturer",
+    "unknown",
+]
+
+
+class Qualification(BaseModel):
+    segment: Segment
+    priority_score: int  # 0–10
+    estimated_containers_per_month: int  # conservative integer
+    decision_maker_type: str  # e.g. "Procurement", "Owner", "Ops Manager"
+    notes: Optional[str] = None

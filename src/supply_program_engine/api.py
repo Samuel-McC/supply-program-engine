@@ -7,11 +7,13 @@ from typing import Optional
 
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
+from httpx import request
 
 from supply_program_engine.config import settings
 from supply_program_engine.logging import get_logger, generate_correlation_id
 from supply_program_engine import ledger
 from supply_program_engine.models import Candidate, EventType
+from supply_program_engine.orchestrator import run_once
 
 log = get_logger("supply_program_engine")
 
@@ -89,6 +91,13 @@ def create_app() -> FastAPI:
                 "candidate": event_payload,
             }
         )
+
+        @app.post("/orchestrator/run-once")
+        async def orchestrator_run_once(request: Request, limit: int = 50):
+            cid = getattr(request.state, "correlation_id", generate_correlation_id())
+            result = run_once(limit=limit)
+            log.info("orchestrator_run_once", extra={"correlation_id": cid, **result})
+            return {"correlation_id": cid, **result}
 
         # idempotent response
         if ledger.exists(event_id):
