@@ -123,3 +123,23 @@ def verify_chain() -> tuple[bool, Optional[str]]:
         prev = actual_hash or prev
 
     return True, None
+
+def get(event_id: str) -> Optional[dict]:
+    """
+    Returns the first matching event record by event_id, else None.
+    """
+    for rec in read():
+        if rec.get("event_id") == event_id:
+            return rec
+    return None
+
+
+def any_event_for_entity(entity_id: str, event_type: str) -> bool:
+    """
+    Returns True if an entity already has an event of a given type.
+    Useful for "did we already send?" gates.
+    """
+    for rec in read():
+        if rec.get("entity_id") == entity_id and rec.get("event_type") == event_type:
+            return True
+    return False

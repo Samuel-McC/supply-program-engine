@@ -36,3 +36,14 @@ def test_find_by_entity(tmp_path, monkeypatch):
     events = ledger.find_by_entity("acme")
     assert len(events) == 1
     assert events[0]["entity_id"] == "acme"
+
+def test_get_by_event_id(tmp_path, monkeypatch):
+    ledger_path = tmp_path / "ledger.jsonl"
+    monkeypatch.setattr(settings, "LEDGER_PATH", str(ledger_path))
+
+    ledger.append({"event_id": "x1", "event_type": "candidate_ingested", "correlation_id": "c1", "entity_id": "e1", "payload": {"a": 1}})
+
+    rec = ledger.get("x1")
+    assert rec is not None
+    assert rec["event_id"] == "x1"
+    assert ledger.get("nope") is None
