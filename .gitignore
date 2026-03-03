@@ -1,0 +1,14 @@
+# env / secrets
+.env
+**/.env
+
+# virtualenv
+.venv/
+
+# python cache
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# local data/output (optional)
+data/
