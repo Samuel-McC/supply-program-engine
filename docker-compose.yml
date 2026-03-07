@@ -1,0 +1,14 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: spe
+      POSTGRES_PASSWORD: spe_password
+      POSTGRES_DB: spe
+    ports:
+      - "5432:5432"
+    volumes:
+      - spe_pgdata:/var/lib/postgresql/data
+
+volumes:
+  spe_pgdata:

@@ -1,14 +1,24 @@
-# env / secrets
-.env
-**/.env
-
-# virtualenv
-.venv/
-
-# python cache
+# Python
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+
+# Virtual environment
+.venv/
+
+# Pytest
 .pytest_cache/
 
-# local data/output (optional)
-data/
+# Environment
+.env
+
+# Ledger data
+data/*.jsonl
+
+# Alembic
+alembic/versions/*.pyc
+
+# OS
+.DS_Store
+Thumbs.db

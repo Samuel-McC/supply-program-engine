@@ -3,7 +3,9 @@ import os
 from hashlib import sha256
 from typing import Iterator, Optional
 
+
 from supply_program_engine.config import settings
+
 
 
 def _ensure_file() -> None:
@@ -12,16 +14,22 @@ def _ensure_file() -> None:
         open(settings.LEDGER_PATH, "w", encoding="utf-8").close()
 
 
+
+
 def _hash_record(record: dict) -> str:
     # hash only deterministic content
     material = json.dumps(record, sort_keys=True, separators=(",", ":"))
     return sha256(material.encode("utf-8")).hexdigest()
 
 
+
+
 def _compute_chain_hash(prev_hash: str, record: dict) -> str:
     # chain = hash(prev_hash + record_hash)
     record_hash = _hash_record(record)
     return sha256((prev_hash + record_hash).encode("utf-8")).hexdigest()
+
+
 
 
 def last_hash() -> str:
@@ -45,51 +53,46 @@ def last_hash() -> str:
     return last
 
 
-def append(event: dict) -> dict:
-    """
-    Append an event to the ledger with hash chaining.
-    Returns the stored record (including hash fields).
-    """
-    _ensure_file()
 
-    prev = last_hash()
-    record = dict(event)  # copy
-    record["prev_hash"] = prev
+
+def append(event: dict) -> dict:
+    if getattr(settings, "LEDGER_BACKEND", "file") == "db":
+        from supply_program_engine import ledger_db
+        return ledger_db.append(event)
+    return _append_file(event)
+
 
     # compute chain hash using prev + record-without-hash
     temp = dict(record)
     temp.pop("hash", None)
     record["hash"] = _compute_chain_hash(prev, temp)
 
+
     with open(settings.LEDGER_PATH, "a", encoding="utf-8") as f:
         f.write(json.dumps(record) + "\n")
+
 
     return record
 
 
-def read() -> Iterator[dict]:
-    """
-    Safe streaming read. Skips corrupt lines.
-    """
-    _ensure_file()
-    with open(settings.LEDGER_PATH, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                rec = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(rec, dict):
-                yield rec
+
+
+def read(entity_id: Optional[str] = None):
+    if getattr(settings, "LEDGER_BACKEND", "file") == "db":
+        from supply_program_engine import ledger_db
+        yield from ledger_db.read(entity_id=entity_id)
+        return
+    ...
+
 
 
 def exists(event_id: str) -> bool:
-    for rec in read():
-        if rec.get("event_id") == event_id:
-            return True
-    return False
+    if getattr(settings, "LEDGER_BACKEND", "file") == "db":
+        from supply_program_engine import ledger_db
+        return ledger_db.exists(event_id)
+    ...
+
+
 
 
 def generate_event_id(payload: dict) -> str:
@@ -97,8 +100,12 @@ def generate_event_id(payload: dict) -> str:
     return sha256(normalized.encode("utf-8")).hexdigest()
 
 
+
+
 def find_by_entity(entity_id: str) -> list[dict]:
     return [rec for rec in read() if rec.get("entity_id") == entity_id]
+
+
 
 
 def verify_chain() -> tuple[bool, Optional[str]]:
@@ -112,26 +119,29 @@ def verify_chain() -> tuple[bool, Optional[str]]:
         if expected_prev != prev:
             return False, f"Broken chain: expected prev_hash={prev}, got {expected_prev}"
 
+
         # recompute
         temp = dict(rec)
         actual_hash = temp.pop("hash", None)
         computed = _compute_chain_hash(prev, temp)
 
+
         if actual_hash != computed:
             return False, "Tamper detected: hash mismatch"
 
+
         prev = actual_hash or prev
+
 
     return True, None
 
+
 def get(event_id: str) -> Optional[dict]:
-    """
-    Returns the first matching event record by event_id, else None.
-    """
-    for rec in read():
-        if rec.get("event_id") == event_id:
-            return rec
-    return None
+    if getattr(settings, "LEDGER_BACKEND", "file") == "db":
+        from supply_program_engine import ledger_db
+        return ledger_db.get(event_id)
+    ...
+
 
 
 def any_event_for_entity(entity_id: str, event_type: str) -> bool:
