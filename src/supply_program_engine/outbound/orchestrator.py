@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from supply_program_engine import ledger
-from supply_program_engine.logging import get_logger, generate_correlation_id
+from supply_program_engine.logging import generate_correlation_id, get_logger
 from supply_program_engine.models import EventType
 from supply_program_engine.outbound.drafts import make_draft
 

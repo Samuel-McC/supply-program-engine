@@ -1,22 +1,20 @@
 from __future__ import annotations
 
-from asyncio import events
-import hmac
 import hashlib
+import hmac
 import json
 from typing import Optional
 
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
-from httpx import request
 
-from supply_program_engine.config import settings
-from supply_program_engine.logging import get_logger, generate_correlation_id
 from supply_program_engine import ledger
-from supply_program_engine.models import Candidate, EventType, ApprovalDecision
+from supply_program_engine.config import settings
+from supply_program_engine.logging import generate_correlation_id, get_logger
+from supply_program_engine.models import ApprovalDecision, Candidate, EventType
 from supply_program_engine.orchestrator import run_once as phase3_run_once
 from supply_program_engine.outbound.orchestrator import run_once as outbound_run_once
-from supply_program_engine.projections import build_pipeline_state, rank_pipeline, entity_timeline
+from supply_program_engine.projections import build_pipeline_state, entity_timeline, rank_pipeline
 
 log = get_logger("supply_program_engine")
 
@@ -61,7 +59,6 @@ def create_app() -> FastAPI:
         cid = getattr(request.state, "correlation_id", generate_correlation_id())
         raw = await request.body()
 
-        # Enforce signature outside dev
         if settings.ENV != "dev":
             if not x_signature:
                 raise HTTPException(status_code=401, detail="Missing X-Signature")
@@ -106,7 +103,6 @@ def create_app() -> FastAPI:
             "correlation_id": cid,
         }
 
-    # Phase 3 orchestrator endpoint
     @app.post("/orchestrator/run-once")
     async def orchestrator_run_once(request: Request, limit: int = 50):
         cid = getattr(request.state, "correlation_id", generate_correlation_id())
@@ -114,7 +110,6 @@ def create_app() -> FastAPI:
         log.info("orchestrator_run_once", extra={"correlation_id": cid, **result})
         return {"correlation_id": cid, **result}
 
-    # Phase 4 outbound draft generation
     @app.post("/outbound/run-once")
     async def outbound_run_once_endpoint(request: Request, limit: int = 50):
         cid = getattr(request.state, "correlation_id", generate_correlation_id())
@@ -122,10 +117,12 @@ def create_app() -> FastAPI:
         log.info("outbound_run_once", extra={"correlation_id": cid, **result})
         return {"correlation_id": cid, **result}
 
-    # Phase 4 approval decision (approve/reject)
     @app.post("/outbound/decision")
     async def outbound_decision(decision: ApprovalDecision, request: Request):
         cid = getattr(request.state, "correlation_id", generate_correlation_id())
+
+        if not decision.reason or not decision.reason.strip():
+            raise HTTPException(status_code=400, detail="Approval/rejection reason is required")
 
         draft_event = ledger.get(decision.draft_id)
         if not draft_event or draft_event.get("event_type") != EventType.OUTBOUND_DRAFT_CREATED.value:
@@ -178,7 +175,6 @@ def create_app() -> FastAPI:
         ranked = rank_pipeline(list(state.values()))
         log.info("pipeline_view", extra={"correlation_id": cid, "count": len(ranked)})
         return {"correlation_id": cid, "count": len(ranked), "items": [v.model_dump() for v in ranked]}
-
 
     @app.get("/entity/{entity_id}")
     async def get_entity(entity_id: str, request: Request):

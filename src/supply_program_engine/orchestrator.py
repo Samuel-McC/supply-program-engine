@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-from typing import Optional
-
 from supply_program_engine import ledger
-from supply_program_engine.logging import get_logger, generate_correlation_id
+from supply_program_engine.logging import generate_correlation_id, get_logger
 from supply_program_engine.models import Candidate, EventType
 from supply_program_engine.qualification import qualify
 
@@ -11,20 +9,12 @@ log = get_logger("supply_program_engine")
 
 
 def _qualification_event_id(candidate_payload: dict) -> str:
-    """
-    Deterministic idempotency key for qualification step.
-    If candidate payload is identical, qualification event_id will be identical.
-    """
     return ledger.generate_event_id(
         {"event_type": EventType.QUALIFICATION_COMPUTED.value, "candidate": candidate_payload}
     )
 
 
 def run_once(limit: int = 50) -> dict:
-    """
-    Reads candidate_ingested events and emits qualification_computed events.
-    Idempotent: safe to run repeatedly.
-    """
     processed = 0
     emitted = 0
     skipped_duplicates = 0
@@ -41,7 +31,6 @@ def run_once(limit: int = 50) -> dict:
         cid = rec.get("correlation_id") or generate_correlation_id()
 
         q_event_id = _qualification_event_id(candidate_payload)
-
         processed += 1
 
         if ledger.exists(q_event_id):

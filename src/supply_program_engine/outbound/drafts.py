@@ -6,7 +6,7 @@ from supply_program_engine.models import OutboundDraft
 def build_email_draft(entity_id: str, segment: str) -> tuple[str, str]:
     """
     Deterministic copy templates.
-    No LLM yet. Keep it simple, industrial, and segment-aligned.
+    No LLM yet.
     """
 
     if segment == "industrial_distributor":
@@ -86,4 +86,6 @@ def make_draft(draft_id: str, entity_id: str, segment: str) -> OutboundDraft:
         segment=segment,
         subject=subject,
         body=body,
+        template_version="v1",
+        generation_mode="deterministic",
     )

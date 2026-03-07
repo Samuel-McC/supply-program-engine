@@ -1,12 +1,12 @@
-from supply_program_engine.config import settings
 from supply_program_engine import ledger
+from supply_program_engine.config import settings
 from supply_program_engine.orchestrator import run_once
 
 
 def test_orchestrator_emits_qualification_once(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "LEDGER_PATH", str(tmp_path / "ledger.jsonl"))
+    monkeypatch.setattr(settings, "LEDGER_BACKEND", "file")
 
-    # Ingest candidate event directly into ledger
     ledger.append(
         {
             "event_id": "ing-1",
@@ -26,7 +26,6 @@ def test_orchestrator_emits_qualification_once(tmp_path, monkeypatch):
     r1 = run_once(limit=10)
     assert r1["emitted"] == 1
 
-    # Run again -> should not emit duplicate qualification
     r2 = run_once(limit=10)
     assert r2["emitted"] == 0
     assert r2["skipped_duplicates"] == 1
@@ -34,6 +33,7 @@ def test_orchestrator_emits_qualification_once(tmp_path, monkeypatch):
 
 def test_orchestrator_qualifies_distributor(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "LEDGER_PATH", str(tmp_path / "ledger.jsonl"))
+    monkeypatch.setattr(settings, "LEDGER_BACKEND", "file")
 
     ledger.append(
         {
@@ -53,9 +53,10 @@ def test_orchestrator_qualifies_distributor(tmp_path, monkeypatch):
 
     run_once(limit=10)
 
-    # Find qualification event
     events = list(ledger.read())
     quals = [e for e in events if e.get("event_type") == "qualification_computed"]
     assert len(quals) == 1
     assert quals[0]["payload"]["segment"] == "industrial_distributor"
     assert quals[0]["payload"]["priority_score"] == 10
+    assert quals[0]["payload"]["scoring_version"] == "v1"
+    assert len(quals[0]["payload"]["evidence"]) >= 1
