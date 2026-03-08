@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from supply_program_engine import ledger
+from supply_program_engine.compliance import evaluate_compliance
 from supply_program_engine.logging import generate_correlation_id, get_logger
-from supply_program_engine.models import Candidate, EventType
+from supply_program_engine.models import Candidate, EventType, Qualification
 from supply_program_engine.qualification import qualify
 
 log = get_logger("supply_program_engine")
@@ -38,7 +39,22 @@ def run_once(limit: int = 50) -> dict:
             continue
 
         candidate = Candidate(**candidate_payload)
-        q = qualify(candidate)
+        base_q = qualify(candidate)
+        compliance = evaluate_compliance(candidate, base_q)
+
+        q = Qualification(
+            segment=base_q.segment,
+            priority_score=base_q.priority_score,
+            estimated_containers_per_month=base_q.estimated_containers_per_month,
+            decision_maker_type=base_q.decision_maker_type,
+            notes=base_q.notes,
+            evidence=base_q.evidence,
+            scoring_version=base_q.scoring_version,
+            risk_score=compliance["risk_score"],
+            requires_manual_review=compliance["requires_manual_review"],
+            policy_version=compliance["policy_version"],
+            compliance_findings=compliance["findings"],
+        )
 
         ledger.append(
             {

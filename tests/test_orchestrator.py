@@ -60,7 +60,9 @@ def test_orchestrator_qualifies_distributor_with_policy_engine(tmp_path, monkeyp
     assert quals[0]["payload"]["priority_score"] == 10
     assert quals[0]["payload"]["estimated_containers_per_month"] == 30
     assert quals[0]["payload"]["scoring_version"] == "v2_policy_engine"
-    assert len(quals[0]["payload"]["evidence"]) >= 1
+    assert quals[0]["payload"]["risk_score"] == 0
+    assert quals[0]["payload"]["requires_manual_review"] is False
+    assert len(quals[0]["payload"]["compliance_findings"]) >= 1
 
 
 def test_orchestrator_unknown_goes_manual_review_path(tmp_path, monkeypatch):
@@ -75,7 +77,7 @@ def test_orchestrator_unknown_goes_manual_review_path(tmp_path, monkeypatch):
             "entity_id": "entity-1",
             "payload": {
                 "company_name": "Mystery Co",
-                "website": "https://mystery-example.com",
+                "website": "",
                 "location": "NV",
                 "source": "manual",
                 "discovered_via": "unknown",
@@ -91,3 +93,5 @@ def test_orchestrator_unknown_goes_manual_review_path(tmp_path, monkeypatch):
     assert quals[0]["payload"]["segment"] == "unknown"
     assert quals[0]["payload"]["priority_score"] == 3
     assert quals[0]["payload"]["scoring_version"] == "v2_policy_engine"
+    assert quals[0]["payload"]["requires_manual_review"] is True
+    assert quals[0]["payload"]["risk_score"] >= 1

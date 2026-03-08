@@ -7,10 +7,6 @@ from supply_program_engine.models import EventType, PipelineEntityView
 
 
 def build_pipeline_state() -> Dict[str, PipelineEntityView]:
-    """
-    Replay the ledger and build a current-state view per entity_id.
-    Deterministic: ledger order defines final state.
-    """
     state: Dict[str, PipelineEntityView] = {}
 
     for rec in ledger.read():
@@ -49,6 +45,12 @@ def build_pipeline_state() -> Dict[str, PipelineEntityView]:
             )
             view.decision_maker_type = payload.get("decision_maker_type", view.decision_maker_type)
             view.scoring_version = payload.get("scoring_version", view.scoring_version)
+            view.risk_score = int(payload.get("risk_score", view.risk_score) or 0)
+            view.requires_manual_review = bool(
+                payload.get("requires_manual_review", view.requires_manual_review)
+            )
+            view.policy_version = payload.get("policy_version", view.policy_version)
+            view.compliance_findings = payload.get("compliance_findings", view.compliance_findings)
             view.status = "qualified"
 
         elif et == EventType.OUTBOUND_DRAFT_CREATED.value:
@@ -76,12 +78,6 @@ def build_pipeline_state() -> Dict[str, PipelineEntityView]:
 
 
 def rank_pipeline(views: List[PipelineEntityView]) -> List[PipelineEntityView]:
-    """
-    Ranking rule (deterministic):
-    - Highest priority_score
-    - Highest estimated containers/month
-    - Prefer earlier stages (not sent)
-    """
     def key(v: PipelineEntityView):
         stage_weight = {
             "candidate_ingested": 5,
@@ -92,7 +88,8 @@ def rank_pipeline(views: List[PipelineEntityView]) -> List[PipelineEntityView]:
             "sent": 0,
         }.get(v.status, 0)
 
-        return (v.priority_score, v.estimated_containers_per_month, stage_weight)
+        # Lower risk is better, so negate it in sort tuple
+        return (v.priority_score, v.estimated_containers_per_month, stage_weight, -v.risk_score)
 
     return sorted(views, key=key, reverse=True)
 

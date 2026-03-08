@@ -32,8 +32,12 @@ def test_projection_builds_current_state(tmp_path, monkeypatch):
             "priority_score": 10,
             "estimated_containers_per_month": 30,
             "decision_maker_type": "Procurement",
-            "scoring_version": "v1",
+            "scoring_version": "v2_policy_engine",
             "evidence": ["matched keyword: distributor"],
+            "risk_score": 0,
+            "requires_manual_review": False,
+            "policy_version": "v1",
+            "compliance_findings": ["no compliance issues detected"],
         },
     })
 
@@ -60,11 +64,13 @@ def test_projection_builds_current_state(tmp_path, monkeypatch):
     assert v.segment == "industrial_distributor"
     assert v.priority_score == 10
     assert v.status == "draft_created"
-    assert v.scoring_version == "v1"
+    assert v.scoring_version == "v2_policy_engine"
     assert v.template_version == "v1"
+    assert v.risk_score == 0
+    assert v.requires_manual_review is False
 
 
-def test_ranking_prefers_higher_score(tmp_path, monkeypatch):
+def test_ranking_prefers_higher_score_and_lower_risk(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "LEDGER_PATH", str(tmp_path / "ledger.jsonl"))
     monkeypatch.setattr(settings, "LEDGER_BACKEND", "file")
 
@@ -91,8 +97,12 @@ def test_ranking_prefers_higher_score(tmp_path, monkeypatch):
             "priority_score": 7,
             "estimated_containers_per_month": 6,
             "decision_maker_type": "Ops",
-            "scoring_version": "v1",
+            "scoring_version": "v2_policy_engine",
             "evidence": ["matched keyword: formwork"],
+            "risk_score": 2,
+            "requires_manual_review": True,
+            "policy_version": "v1",
+            "compliance_findings": ["low confidence qualification"],
         },
     })
 
@@ -119,8 +129,12 @@ def test_ranking_prefers_higher_score(tmp_path, monkeypatch):
             "priority_score": 10,
             "estimated_containers_per_month": 30,
             "decision_maker_type": "Procurement",
-            "scoring_version": "v1",
+            "scoring_version": "v2_policy_engine",
             "evidence": ["matched keyword: distributor"],
+            "risk_score": 0,
+            "requires_manual_review": False,
+            "policy_version": "v1",
+            "compliance_findings": ["no compliance issues detected"],
         },
     })
 

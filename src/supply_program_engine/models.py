@@ -39,9 +39,14 @@ class Qualification(BaseModel):
     decision_maker_type: str
     notes: Optional[str] = None
 
-    # Phase 3 hardening
     evidence: list[str] = Field(default_factory=list)
     scoring_version: str = "v1"
+
+    # Phase 8
+    risk_score: int = 0
+    requires_manual_review: bool = False
+    policy_version: str = "v1"
+    compliance_findings: list[str] = Field(default_factory=list)
 
 
 class OutboundDraft(BaseModel):
@@ -54,7 +59,6 @@ class OutboundDraft(BaseModel):
     to_hint: Optional[str] = None
     status: Literal["draft"] = "draft"
 
-    # Phase 4 hardening
     template_version: str = "v1"
     generation_mode: Literal["deterministic", "llm_assisted"] = "deterministic"
 
@@ -101,7 +105,8 @@ class PipelineEntityView(BaseModel):
     rejection_reason: Optional[str] = None
     last_decision_reason: Optional[str] = None
 
-    # Phase 5 hardening
     scoring_version: str = "v1"
     requires_manual_review: bool = False
     risk_score: int = 0
+    policy_version: str = "v1"
+    compliance_findings: list[str] = Field(default_factory=list)
