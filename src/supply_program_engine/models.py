@@ -12,6 +12,7 @@ class EventType(str, Enum):
     OUTBOUND_DRAFT_CREATED = "outbound_draft_created"
     OUTBOUND_APPROVED = "outbound_approved"
     OUTBOUND_REJECTED = "outbound_rejected"
+    OUTBOX_READY = "outbox_ready"
     OUTBOUND_SENT = "outbound_sent"
 
 
@@ -42,7 +43,6 @@ class Qualification(BaseModel):
     evidence: list[str] = Field(default_factory=list)
     scoring_version: str = "v1"
 
-    # Phase 8
     risk_score: int = 0
     requires_manual_review: bool = False
     policy_version: str = "v1"
@@ -76,6 +76,7 @@ PipelineStatus = Literal[
     "draft_created",
     "approved",
     "rejected",
+    "outbox_ready",
     "sent",
 ]
 
@@ -110,3 +111,6 @@ class PipelineEntityView(BaseModel):
     risk_score: int = 0
     policy_version: str = "v1"
     compliance_findings: list[str] = Field(default_factory=list)
+
+    outbox_ready: bool = False
+    sent_at: Optional[str] = None

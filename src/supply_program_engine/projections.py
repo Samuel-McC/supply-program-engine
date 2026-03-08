@@ -71,7 +71,12 @@ def build_pipeline_state() -> Dict[str, PipelineEntityView]:
             view.last_decision_reason = payload.get("reason", view.last_decision_reason)
             view.status = "rejected"
 
+        elif et == EventType.OUTBOX_READY.value:
+            view.outbox_ready = True
+            view.status = "outbox_ready"
+
         elif et == EventType.OUTBOUND_SENT.value:
+            view.sent_at = ts
             view.status = "sent"
 
     return state
@@ -80,15 +85,15 @@ def build_pipeline_state() -> Dict[str, PipelineEntityView]:
 def rank_pipeline(views: List[PipelineEntityView]) -> List[PipelineEntityView]:
     def key(v: PipelineEntityView):
         stage_weight = {
-            "candidate_ingested": 5,
-            "qualified": 4,
-            "draft_created": 3,
-            "approved": 2,
+            "candidate_ingested": 6,
+            "qualified": 5,
+            "draft_created": 4,
+            "approved": 3,
+            "outbox_ready": 2,
             "rejected": 1,
             "sent": 0,
         }.get(v.status, 0)
 
-        # Lower risk is better, so negate it in sort tuple
         return (v.priority_score, v.estimated_containers_per_month, stage_weight, -v.risk_score)
 
     return sorted(views, key=key, reverse=True)

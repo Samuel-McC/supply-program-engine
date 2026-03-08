@@ -14,6 +14,7 @@ from supply_program_engine.logging import generate_correlation_id, get_logger
 from supply_program_engine.models import ApprovalDecision, Candidate, EventType
 from supply_program_engine.orchestrator import run_once as phase3_run_once
 from supply_program_engine.outbound.orchestrator import run_once as outbound_run_once
+from supply_program_engine.outbound.sender import run_once as sender_run_once
 from supply_program_engine.projections import build_pipeline_state, entity_timeline, rank_pipeline
 
 log = get_logger("supply_program_engine")
@@ -117,6 +118,13 @@ def create_app() -> FastAPI:
         log.info("outbound_run_once", extra={"correlation_id": cid, **result})
         return {"correlation_id": cid, **result}
 
+    @app.post("/sender/run-once")
+    async def sender_run_once_endpoint(request: Request, limit: int = 50):
+        cid = getattr(request.state, "correlation_id", generate_correlation_id())
+        result = sender_run_once(limit=limit)
+        log.info("sender_run_once", extra={"correlation_id": cid, **result})
+        return {"correlation_id": cid, **result}
+
     @app.post("/outbound/decision")
     async def outbound_decision(decision: ApprovalDecision, request: Request):
         cid = getattr(request.state, "correlation_id", generate_correlation_id())
@@ -155,6 +163,30 @@ def create_app() -> FastAPI:
                 "payload": decision.model_dump(),
             }
         )
+
+        if decision.decision == "approved":
+            outbox_event_id = ledger.generate_event_id(
+                {
+                    "event_type": EventType.OUTBOX_READY.value,
+                    "draft_id": decision.draft_id,
+                    "entity_id": draft_event.get("entity_id"),
+                }
+            )
+
+            if not ledger.exists(outbox_event_id):
+                ledger.append(
+                    {
+                        "event_id": outbox_event_id,
+                        "event_type": EventType.OUTBOX_READY.value,
+                        "correlation_id": cid,
+                        "entity_id": draft_event.get("entity_id"),
+                        "payload": {
+                            "draft_id": decision.draft_id,
+                            "channel": "email",
+                            "status": "ready",
+                        },
+                    }
+                )
 
         log.info(
             "outbound_decision_recorded",

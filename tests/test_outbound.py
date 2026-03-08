@@ -19,8 +19,12 @@ def test_outbound_creates_draft_once(tmp_path, monkeypatch):
                 "priority_score": 10,
                 "estimated_containers_per_month": 30,
                 "decision_maker_type": "Procurement",
-                "scoring_version": "v1",
+                "scoring_version": "v2_policy_engine",
                 "evidence": ["matched keyword: distributor"],
+                "risk_score": 0,
+                "requires_manual_review": False,
+                "policy_version": "v1",
+                "compliance_findings": ["no compliance issues detected"],
             },
         }
     )
