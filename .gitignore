@@ -1,8 +1,6 @@
 # Python
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
 
 # Virtual environment
 .venv/
@@ -10,14 +8,16 @@ __pycache__/
 # Pytest
 .pytest_cache/
 
-# Environment
+# Environment / secrets
 .env
+**/.env
 
-# Ledger data
+# Local ledger / generated data
 data/*.jsonl
 
-# Alembic
+# Alembic cache
 alembic/versions/*.pyc
+alembic/versions/__pycache__/
 
 # OS
 .DS_Store

@@ -32,6 +32,25 @@ def _compute_signature(raw_body: bytes) -> str:
     return hmac.new(secret, raw_body, hashlib.sha256).hexdigest()
 
 
+def _require_admin_api_key(x_admin_api_key: Optional[str]) -> None:
+    """
+    In dev, admin routes are open by default.
+    In non-dev, require ADMIN_API_KEY to be configured and supplied.
+    """
+    if settings.ENV == "dev":
+        return
+
+    expected = settings.ADMIN_API_KEY
+    if not expected:
+        raise HTTPException(status_code=500, detail="ADMIN_API_KEY is not configured")
+
+    if not x_admin_api_key:
+        raise HTTPException(status_code=401, detail="Missing X-Admin-API-Key")
+
+    if not hmac.compare_digest(x_admin_api_key, expected):
+        raise HTTPException(status_code=401, detail="Invalid X-Admin-API-Key")
+
+
 def create_app() -> FastAPI:
     app = FastAPI(title=settings.APP_NAME)
 
@@ -51,6 +70,17 @@ def create_app() -> FastAPI:
             status_code=500,
             content={"error": "internal_error", "correlation_id": cid},
         )
+
+    @app.get("/health")
+    async def health():
+        return {"status": "ok", "service": settings.APP_NAME, "env": settings.ENV}
+
+    @app.get("/ready")
+    async def ready():
+        if settings.LEDGER_BACKEND == "db":
+            if not settings.DATABASE_URL:
+                raise HTTPException(status_code=503, detail="DATABASE_URL not configured for db backend")
+        return {"status": "ready", "ledger_backend": settings.LEDGER_BACKEND}
 
     @app.post("/ingress/candidate")
     async def ingest_candidate(
@@ -105,28 +135,48 @@ def create_app() -> FastAPI:
         }
 
     @app.post("/orchestrator/run-once")
-    async def orchestrator_run_once(request: Request, limit: int = 50):
+    async def orchestrator_run_once(
+        request: Request,
+        limit: int = 50,
+        x_admin_api_key: Optional[str] = Header(default=None),
+    ):
+        _require_admin_api_key(x_admin_api_key)
         cid = getattr(request.state, "correlation_id", generate_correlation_id())
         result = phase3_run_once(limit=limit)
         log.info("orchestrator_run_once", extra={"correlation_id": cid, **result})
         return {"correlation_id": cid, **result}
 
     @app.post("/outbound/run-once")
-    async def outbound_run_once_endpoint(request: Request, limit: int = 50):
+    async def outbound_run_once_endpoint(
+        request: Request,
+        limit: int = 50,
+        x_admin_api_key: Optional[str] = Header(default=None),
+    ):
+        _require_admin_api_key(x_admin_api_key)
         cid = getattr(request.state, "correlation_id", generate_correlation_id())
         result = outbound_run_once(limit=limit)
         log.info("outbound_run_once", extra={"correlation_id": cid, **result})
         return {"correlation_id": cid, **result}
 
     @app.post("/sender/run-once")
-    async def sender_run_once_endpoint(request: Request, limit: int = 50):
+    async def sender_run_once_endpoint(
+        request: Request,
+        limit: int = 50,
+        x_admin_api_key: Optional[str] = Header(default=None),
+    ):
+        _require_admin_api_key(x_admin_api_key)
         cid = getattr(request.state, "correlation_id", generate_correlation_id())
         result = sender_run_once(limit=limit)
         log.info("sender_run_once", extra={"correlation_id": cid, **result})
         return {"correlation_id": cid, **result}
 
     @app.post("/outbound/decision")
-    async def outbound_decision(decision: ApprovalDecision, request: Request):
+    async def outbound_decision(
+        decision: ApprovalDecision,
+        request: Request,
+        x_admin_api_key: Optional[str] = Header(default=None),
+    ):
+        _require_admin_api_key(x_admin_api_key)
         cid = getattr(request.state, "correlation_id", generate_correlation_id())
 
         if not decision.reason or not decision.reason.strip():
