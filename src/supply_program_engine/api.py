@@ -67,8 +67,15 @@ def create_app() -> FastAPI:
 
         try:
             record_request(str(request.url.path), float(duration))
-        except Exception:
-            pass
+        except Exception as exc:
+            log.warning(
+                "metrics_record_failure",
+                extra={
+                    "path": str(request.url.path),
+                    "error": str(exc),
+                },
+            )
+
 
         response.headers["x-correlation-id"] = cid
         response.headers["x-response-time-ms"] = str(round(duration * 1000, 2))
