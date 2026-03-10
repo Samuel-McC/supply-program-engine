@@ -8,6 +8,9 @@ from typing import Optional
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
 
+import time
+from supply_program_engine.metrics import record_request, snapshot
+
 from supply_program_engine import ledger
 from supply_program_engine.config import settings
 from supply_program_engine.logging import generate_correlation_id, get_logger
@@ -55,12 +58,21 @@ def create_app() -> FastAPI:
     app = FastAPI(title=settings.APP_NAME)
 
     @app.middleware("http")
-    async def correlation_middleware(request: Request, call_next):
-        cid = request.headers.get("x-correlation-id") or generate_correlation_id()
-        request.state.correlation_id = cid
-        response = await call_next(request)
-        response.headers["x-correlation-id"] = cid
-        return response
+    async def observability_middleware(request: Request, call_next):
+           start = time.time()
+
+           cid = request.headers.get("x-correlation-id") or generate_correlation_id()
+           request.state.correlation_id = cid
+
+           response = await call_next(request)
+
+           duration = time.time() - start
+           record_request(request.url.path, duration)
+
+           response.headers["x-correlation-id"] = cid
+           response.headers["x-response-time-ms"] = str(round(duration * 1000, 2))
+
+           return response
 
     @app.exception_handler(Exception)
     async def unhandled_exception_handler(request: Request, exc: Exception):
@@ -270,3 +282,7 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
+
+@app.get("/metrics")
+def metrics():
+    return {"status": "ok"}
