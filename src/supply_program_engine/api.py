@@ -3,17 +3,19 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import time
+from tracemalloc import start
 from typing import Optional
+from urllib import request, response
 
 from fastapi import FastAPI, Header, HTTPException, Request
-from fastapi.responses import JSONResponse
-
-import time
-from supply_program_engine.metrics import record_request, snapshot
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.templating import Jinja2Templates
 
 from supply_program_engine import ledger
 from supply_program_engine.config import settings
 from supply_program_engine.logging import generate_correlation_id, get_logger
+from supply_program_engine.metrics import record_request, snapshot
 from supply_program_engine.models import ApprovalDecision, Candidate, EventType
 from supply_program_engine.orchestrator import run_once as phase3_run_once
 from supply_program_engine.outbound.orchestrator import run_once as outbound_run_once
@@ -21,6 +23,7 @@ from supply_program_engine.outbound.sender import run_once as sender_run_once
 from supply_program_engine.projections import build_pipeline_state, entity_timeline, rank_pipeline
 
 log = get_logger("supply_program_engine")
+templates = Jinja2Templates(directory="src/supply_program_engine/templates")
 
 
 def _stable_entity_id(candidate: Candidate) -> str:
@@ -36,10 +39,6 @@ def _compute_signature(raw_body: bytes) -> str:
 
 
 def _require_admin_api_key(x_admin_api_key: Optional[str]) -> None:
-    """
-    In dev, admin routes are open by default.
-    In non-dev, require ADMIN_API_KEY to be configured and supplied.
-    """
     if settings.ENV == "dev":
         return
 
@@ -59,29 +58,31 @@ def create_app() -> FastAPI:
 
     @app.middleware("http")
     async def observability_middleware(request: Request, call_next):
-           start = time.time()
+        cid = request.headers.get("x-correlation-id") or generate_correlation_id()
+        request.state.correlation_id = cid
 
-           cid = request.headers.get("x-correlation-id") or generate_correlation_id()
-           request.state.correlation_id = cid
+        start = time.time()
+        response = await call_next(request)
+        duration = time.time() - start
 
-           response = await call_next(request)
+        try:
+            record_request(str(request.url.path), float(duration))
+        except Exception:
+            pass
 
-           duration = time.time() - start
-           record_request(request.url.path, duration)
+        response.headers["x-correlation-id"] = cid
+        response.headers["x-response-time-ms"] = str(round(duration * 1000, 2))
+        return response
 
-           response.headers["x-correlation-id"] = cid
-           response.headers["x-response-time-ms"] = str(round(duration * 1000, 2))
 
-           return response
-
-    @app.exception_handler(Exception)
-    async def unhandled_exception_handler(request: Request, exc: Exception):
-        cid = getattr(request.state, "correlation_id", "unknown")
-        log.error("unhandled_exception", extra={"correlation_id": cid})
-        return JSONResponse(
-            status_code=500,
-            content={"error": "internal_error", "correlation_id": cid},
-        )
+    #@app.exception_handler(Exception)
+    #async def unhandled_exception_handler(request: Request, exc: Exception):
+        #cid = getattr(request.state, "correlation_id", "unknown")
+        #log.error("unhandled_exception", extra={"correlation_id": cid})
+        #return JSONResponse(
+            #status_code=500,
+            #content={"error": "internal_error", "correlation_id": cid},
+        #)
 
     @app.get("/health")
     async def health():
@@ -89,10 +90,13 @@ def create_app() -> FastAPI:
 
     @app.get("/ready")
     async def ready():
-        if settings.LEDGER_BACKEND == "db":
-            if not settings.DATABASE_URL:
-                raise HTTPException(status_code=503, detail="DATABASE_URL not configured for db backend")
+        if settings.LEDGER_BACKEND == "db" and not settings.DATABASE_URL:
+            raise HTTPException(status_code=503, detail="DATABASE_URL not configured for db backend")
         return {"status": "ready", "ledger_backend": settings.LEDGER_BACKEND}
+
+    @app.get("/metrics")
+    async def metrics():
+        return snapshot()
 
     @app.post("/ingress/candidate")
     async def ingest_candidate(
@@ -278,11 +282,54 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=404, detail="Entity not found")
         return {"correlation_id": cid, "entity_id": entity_id, "events": events}
 
+    @app.get("/ui/candidates", response_class=HTMLResponse)
+    async def ui_candidates(request: Request):
+        state = build_pipeline_state()
+        ranked = rank_pipeline(list(state.values()))
+
+        summary = {
+            "total": len(ranked),
+            "manual_review": len([x for x in ranked if x.requires_manual_review]),
+            "approved": len([x for x in ranked if x.status == "approved"]),
+            "sent": len([x for x in ranked if x.status == "sent"]),
+        }
+
+        return templates.TemplateResponse(
+            "candidates.html",
+            {
+                "request": request,
+                "summary": summary,
+            },
+    )
+
+
+    @app.get("/ui/candidates/table", response_class=HTMLResponse)
+    async def ui_candidates_table(request: Request):
+        state = build_pipeline_state()
+        ranked = rank_pipeline(list(state.values()))
+
+        return templates.TemplateResponse(
+            "candidates_table.html",
+            {   
+                "request": request,
+                "candidates": ranked,
+            },
+    )
+
+
+    @app.get("/ui/metrics", response_class=HTMLResponse)
+    async def ui_metrics(request: Request):
+        events = list(ledger.read())
+        return templates.TemplateResponse(
+            "metrics.html",
+            {
+                "request": request,
+                "total_events": len(events),
+                "metrics": snapshot(),
+            },
+        )
+
     return app
 
 
 app = create_app()
-
-@app.get("/metrics")
-def metrics():
-    return {"status": "ok"}

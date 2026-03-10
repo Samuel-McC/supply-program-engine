@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="mb-8">
+    <h2 class="text-3xl font-bold text-slate-900">Candidate Pipeline</h2>
+    <p class="text-slate-500 mt-2">Ranked operator view of current candidate state.</p>
+</div>
+
+<div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+    <div class="bg-white rounded-xl shadow-sm border p-5">
+        <div class="text-sm text-slate-500">Total Entities</div>
+        <div class="text-2xl font-bold text-slate-900 mt-1">{{ summary.total }}</div>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border p-5">
+        <div class="text-sm text-slate-500">Manual Review</div>
+        <div class="text-2xl font-bold text-amber-600 mt-1">{{ summary.manual_review }}</div>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border p-5">
+        <div class="text-sm text-slate-500">Approved</div>
+        <div class="text-2xl font-bold text-emerald-600 mt-1">{{ summary.approved }}</div>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border p-5">
+        <div class="text-sm text-slate-500">Sent</div>
+        <div class="text-2xl font-bold text-blue-600 mt-1">{{ summary.sent }}</div>
+    </div>
+</div>
+
+<div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+    <table class="w-full text-sm">
+        <thead class="bg-slate-50 border-b">
+            <tr>
+                <th class="p-4 text-left font-semibold text-slate-700">Company</th>
+                <th class="p-4 text-left font-semibold text-slate-700">Segment</th>
+                <th class="p-4 text-left font-semibold text-slate-700">Priority</th>
+                <th class="p-4 text-left font-semibold text-slate-700">Risk</th>
+                <th class="p-4 text-left font-semibold text-slate-700">Status</th>
+                <th class="p-4 text-left font-semibold text-slate-700">Manual Review</th>
+                <th class="p-4 text-left font-semibold text-slate-700">Open</th>
+            </tr>
+        </thead>
+
+        <tbody
+            hx-get="/ui/candidates/table"
+            hx-trigger="load"
+            hx-target="this"
+        >
+            <tr>
+                <td colspan="7" class="p-6 text-slate-500">Loading pipeline...</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+{% endblock %}

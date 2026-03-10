@@ -1,0 +1,52 @@
+{% for c in candidates %}
+<tr class="border-b last:border-b-0 hover:bg-slate-50">
+    <td class="p-4">
+        <div class="font-medium text-slate-900">{{ c.company_name }}</div>
+        <div class="text-xs text-slate-500 mt-1">{{ c.location or "Unknown location" }}</div>
+    </td>
+
+    <td class="p-4 text-slate-700">{{ c.segment }}</td>
+
+    <td class="p-4">
+        <span class="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-1 text-xs font-semibold text-blue-700">
+            {{ c.priority_score }}
+        </span>
+    </td>
+
+    <td class="p-4">
+        {% if c.risk_score >= 4 %}
+            <span class="inline-flex items-center rounded-full bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-700">
+                {{ c.risk_score }}
+            </span>
+        {% elif c.risk_score >= 1 %}
+            <span class="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700">
+                {{ c.risk_score }}
+            </span>
+        {% else %}
+            <span class="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                {{ c.risk_score }}
+            </span>
+        {% endif %}
+    </td>
+
+    <td class="p-4">
+        <span class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
+            {{ c.status }}
+        </span>
+    </td>
+
+    <td class="p-4">
+        {% if c.requires_manual_review %}
+            <span class="text-amber-600 font-medium">Yes</span>
+        {% else %}
+            <span class="text-emerald-600 font-medium">No</span>
+        {% endif %}
+    </td>
+
+    <td class="p-4">
+        <a href="/ui/entity/{{ c.entity_id }}" class="text-blue-600 font-medium hover:underline">
+            View
+        </a>
+    </td>
+</tr>
+{% endfor %}

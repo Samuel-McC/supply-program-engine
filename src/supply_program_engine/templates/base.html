@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Supply Program Engine</title>
+    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-gradient-to-br from-slate-50 to-slate-200 text-slate-900">
+    <div class="min-h-screen">
+        <header class="border-b bg-white shadow-sm">
+            <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+                <div>
+                    <h1 class="text-2xl font-bold tracking-tight">Supply Program Engine</h1>
+                    <p class="text-sm text-slate-500">Operator Console</p>
+                </div>
+
+                <nav class="flex gap-6 text-sm font-medium">
+                    <a href="/ui/candidates" class="text-slate-700 hover:text-blue-600">Candidates</a>
+                    <a href="/ui/metrics" class="text-slate-700 hover:text-blue-600">Metrics</a>
+                </nav>
+            </div>
+        </header>
+
+        <main class="max-w-7xl mx-auto px-6 py-8">
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+</body>
+</html>
