@@ -12,6 +12,10 @@ from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 
+from fastapi import Form
+from fastapi.responses import RedirectResponse
+from supply_program_engine.models import ApprovalDecision
+
 from supply_program_engine import ledger
 from supply_program_engine.config import settings
 from supply_program_engine.logging import generate_correlation_id, get_logger
@@ -335,6 +339,143 @@ def create_app() -> FastAPI:
                 "metrics": snapshot(),
             },
         )
+
+    @app.get("/ui/entity/{entity_id}", response_class=HTMLResponse)
+    async def ui_entity_detail(request: Request, entity_id: str):
+        state = build_pipeline_state()
+        entity = state.get(entity_id)
+
+        if not entity:
+            raise HTTPException(status_code=404, detail="Entity not found")
+
+        events = entity_timeline(entity_id)
+
+        return templates.TemplateResponse(
+            "entity_detail.html",
+            {
+                "request": request,
+                "entity": entity,
+                "events": events,
+            },
+        )
+
+    @app.post("/ui/entity/{entity_id}/approve")
+    async def ui_entity_approve(
+        entity_id: str,
+        actor: str = Form(...),
+        reason: str = Form(...),
+    ):
+        state = build_pipeline_state()
+        entity = state.get(entity_id)
+
+        if not entity:
+            raise HTTPException(status_code=404, detail="Entity not found")
+
+        if not entity.draft_id:
+            raise HTTPException(status_code=400, detail="No draft available")
+
+        if not reason.strip():
+            raise HTTPException(status_code=400, detail="Approval reason is required")
+
+        decision = ApprovalDecision(
+            draft_id=entity.draft_id,
+            decision="approved",
+            actor=actor,
+            reason=reason,
+        )
+
+        decision_event_id = ledger.generate_event_id(
+            {
+                "event_type": EventType.OUTBOUND_APPROVED.value,
+                "draft_id": decision.draft_id,
+                "actor": decision.actor,
+                "reason": decision.reason,
+            }
+        )
+
+        if not ledger.exists(decision_event_id):
+            ledger.append(
+                {
+                    "event_id": decision_event_id,
+                    "event_type": EventType.OUTBOUND_APPROVED.value,
+                    "correlation_id": "ui-action",
+                    "entity_id": entity_id,
+                    "payload": decision.model_dump(),
+                }
+            )
+
+        outbox_event_id = ledger.generate_event_id(
+            {
+                "event_type": EventType.OUTBOX_READY.value,
+                "draft_id": decision.draft_id,
+                "entity_id": entity_id,
+            }
+        )
+
+        if not ledger.exists(outbox_event_id):
+            ledger.append(
+                {
+                    "event_id": outbox_event_id,
+                    "event_type": EventType.OUTBOX_READY.value,
+                    "correlation_id": "ui-action",
+                    "entity_id": entity_id,
+                    "payload": {
+                        "draft_id": decision.draft_id,
+                        "channel": "email",
+                        "status": "ready",
+                    },
+                }
+            )
+
+        return RedirectResponse(url=f"/ui/entity/{entity_id}", status_code=303)
+
+    @app.post("/ui/entity/{entity_id}/reject")
+    async def ui_entity_reject(
+        entity_id: str,
+        actor: str = Form(...),
+        reason: str = Form(...),
+    ):
+        state = build_pipeline_state()
+        entity = state.get(entity_id)
+
+        if not entity:
+            raise HTTPException(status_code=404, detail="Entity not found")
+
+        if not entity.draft_id:
+            raise HTTPException(status_code=400, detail="No draft available")
+
+        if not reason.strip():
+            raise HTTPException(status_code=400, detail="Rejection reason is required")
+
+        decision = ApprovalDecision(
+            draft_id=entity.draft_id,
+            decision="rejected",
+            actor=actor,
+            reason=reason,
+        )
+
+        decision_event_id = ledger.generate_event_id(
+            {
+                "event_type": EventType.OUTBOUND_REJECTED.value,
+                "draft_id": decision.draft_id,
+                "actor": decision.actor,
+                "reason": decision.reason,
+            }
+        )
+
+        if not ledger.exists(decision_event_id):
+            ledger.append(
+                {
+                    "event_id": decision_event_id,
+                    "event_type": EventType.OUTBOUND_REJECTED.value,
+                    "correlation_id": "ui-action",
+                    "entity_id": entity_id,
+                    "payload": decision.model_dump(),
+                }
+            )
+
+        return RedirectResponse(url=f"/ui/entity/{entity_id}", status_code=303)
+
 
     return app
 

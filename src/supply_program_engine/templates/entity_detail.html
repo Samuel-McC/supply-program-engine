@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="mb-6">
+    <a href="/ui/candidates" class="text-sm text-blue-600 hover:underline">← Back to pipeline</a>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+    <div class="lg:col-span-2 space-y-6">
+        <div class="bg-white rounded-xl shadow-sm border p-6">
+            <div class="flex items-start justify-between">
+                <div>
+                    <h2 class="text-2xl font-bold text-slate-900">{{ entity.company_name }}</h2>
+                    <p class="text-slate-500 mt-1">{{ entity.location or "Unknown location" }}</p>
+                </div>
+
+                <span class="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                    {{ entity.status }}
+                </span>
+            </div>
+
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+                <div>
+                    <div class="text-xs uppercase tracking-wide text-slate-500">Segment</div>
+                    <div class="mt-1 font-medium">{{ entity.segment }}</div>
+                </div>
+                <div>
+                    <div class="text-xs uppercase tracking-wide text-slate-500">Priority</div>
+                    <div class="mt-1 font-medium">{{ entity.priority_score }}</div>
+                </div>
+                <div>
+                    <div class="text-xs uppercase tracking-wide text-slate-500">Risk</div>
+                    <div class="mt-1 font-medium">{{ entity.risk_score }}</div>
+                </div>
+                <div>
+                    <div class="text-xs uppercase tracking-wide text-slate-500">Manual Review</div>
+                    <div class="mt-1 font-medium">
+                        {% if entity.requires_manual_review %}
+                            <span class="text-amber-600">Yes</span>
+                        {% else %}
+                            <span class="text-emerald-600">No</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+                <div>
+                    <div class="text-xs uppercase tracking-wide text-slate-500">Decision Maker Type</div>
+                    <div class="mt-1">{{ entity.decision_maker_type }}</div>
+                </div>
+                <div>
+                    <div class="text-xs uppercase tracking-wide text-slate-500">Scoring Version</div>
+                    <div class="mt-1">{{ entity.scoring_version }}</div>
+                </div>
+                <div>
+                    <div class="text-xs uppercase tracking-wide text-slate-500">Template Version</div>
+                    <div class="mt-1">{{ entity.template_version or "N/A" }}</div>
+                </div>
+                <div>
+                    <div class="text-xs uppercase tracking-wide text-slate-500">Last Decision Reason</div>
+                    <div class="mt-1">{{ entity.last_decision_reason or "N/A" }}</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border p-6">
+            <h3 class="text-lg font-semibold text-slate-900 mb-4">Compliance Findings</h3>
+
+            {% if entity.compliance_findings %}
+                <ul class="space-y-2">
+                    {% for finding in entity.compliance_findings %}
+                    <li class="text-sm text-slate-700">• {{ finding }}</li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p class="text-sm text-slate-500">No findings recorded.</p>
+            {% endif %}
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border p-6">
+            <h3 class="text-lg font-semibold text-slate-900 mb-4">Draft Preview</h3>
+
+            {% if entity.draft_subject %}
+                <div class="mb-4">
+                    <div class="text-xs uppercase tracking-wide text-slate-500">Subject</div>
+                    <div class="mt-1 font-medium">{{ entity.draft_subject }}</div>
+                </div>
+
+                <div>
+                    <div class="text-xs uppercase tracking-wide text-slate-500">Body</div>
+                    <pre class="mt-2 whitespace-pre-wrap text-sm text-slate-700 bg-slate-50 border rounded-lg p-4">{{ entity.draft_body }}</pre>
+                </div>
+            {% else %}
+                <p class="text-sm text-slate-500">No draft has been generated yet.</p>
+            {% endif %}
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border p-6">
+            <h3 class="text-lg font-semibold text-slate-900 mb-4">Event Timeline</h3>
+
+            <div class="space-y-4">
+                {% for ev in events %}
+                <div class="border rounded-lg p-4 bg-slate-50">
+                    <div class="flex items-center justify-between">
+                        <div class="font-medium text-slate-900">{{ ev.event_type }}</div>
+                        <div class="text-xs text-slate-500">{{ ev.correlation_id }}</div>
+                    </div>
+                    <pre class="mt-3 whitespace-pre-wrap text-xs text-slate-700">{{ ev.payload }}</pre>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <div class="space-y-6">
+        <div class="bg-white rounded-xl shadow-sm border p-6">
+            <h3 class="text-lg font-semibold text-slate-900 mb-4">Operator Actions</h3>
+
+            {% if entity.draft_id %}
+            <form method="post" action="/ui/entity/{{ entity.entity_id }}/approve" class="space-y-3 mb-6">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700">Actor</label>
+                    <input
+                        type="text"
+                        name="actor"
+                        value="operator@example.internal"
+                        class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                        required
+                    >
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-slate-700">Approval Reason</label>
+                    <textarea
+                        name="reason"
+                        rows="3"
+                        class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                        required
+                    >Approved after operator review of score, draft, and compliance findings.</textarea>
+                </div>
+
+                <button
+                    type="submit"
+                    class="w-full rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+                >
+                    Approve Draft
+                </button>
+            </form>
+
+            <form method="post" action="/ui/entity/{{ entity.entity_id }}/reject" class="space-y-3">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700">Actor</label>
+                    <input
+                        type="text"
+                        name="actor"
+                        value="operator@example.internal"
+                        class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                        required
+                    >
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-slate-700">Rejection Reason</label>
+                    <textarea
+                        name="reason"
+                        rows="3"
+                        class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                        required
+                    >Rejected pending manual review or stronger qualification evidence.</textarea>
+                </div>
+
+                <button
+                    type="submit"
+                    class="w-full rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
+                >
+                    Reject Draft
+                </button>
+            </form>
+            {% else %}
+                <p class="text-sm text-slate-500">No draft available for action.</p>
+            {% endif %}
+        </div>
+    </div>
+
+</div>
+{% endblock %}
