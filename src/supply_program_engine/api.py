@@ -475,6 +475,25 @@ def create_app() -> FastAPI:
             )
 
         return RedirectResponse(url=f"/ui/entity/{entity_id}", status_code=303)
+    
+
+    @app.post("/ui/entity/{entity_id}/send-now")
+    async def ui_entity_send_now(
+        entity_id: str,
+        actor: str = Form(...),
+    ):
+        state = build_pipeline_state()
+        entity = state.get(entity_id)
+
+        if not entity:
+            raise HTTPException(status_code=404, detail="Entity not found")
+
+        if entity.status != "outbox_ready":
+            raise HTTPException(status_code=400, detail="Entity is not ready to send")
+
+        sender_run_once(limit=50)
+
+        return RedirectResponse(url=f"/ui/entity/{entity_id}", status_code=303)
 
 
     return app

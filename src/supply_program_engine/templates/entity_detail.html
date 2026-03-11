@@ -66,6 +66,33 @@
         </div>
 
         <div class="bg-white rounded-xl shadow-sm border p-6">
+            <h3 class="text-lg font-semibold text-slate-900 mb-4">Send Status</h3>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="rounded-lg border bg-slate-50 p-4">
+                    <div class="text-xs uppercase tracking-wide text-slate-500">Outbox Ready</div>
+                    <div class="mt-1 font-medium">
+                        {% if entity.outbox_ready %}
+                            <span class="text-emerald-600">Yes</span>
+                        {% else %}
+                            <span class="text-slate-500">No</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="rounded-lg border bg-slate-50 p-4">
+                    <div class="text-xs uppercase tracking-wide text-slate-500">Sent At</div>
+                    <div class="mt-1 font-medium">{{ entity.sent_at or "Not sent" }}</div>
+                </div>
+
+                <div class="rounded-lg border bg-slate-50 p-4">
+                    <div class="text-xs uppercase tracking-wide text-slate-500">Current Status</div>
+                    <div class="mt-1 font-medium">{{ entity.status }}</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border p-6">
             <h3 class="text-lg font-semibold text-slate-900 mb-4">Compliance Findings</h3>
 
             {% if entity.compliance_findings %}
@@ -118,7 +145,7 @@
         <div class="bg-white rounded-xl shadow-sm border p-6">
             <h3 class="text-lg font-semibold text-slate-900 mb-4">Operator Actions</h3>
 
-            {% if entity.draft_id %}
+            {% if entity.draft_id and entity.status in ["draft_created", "rejected"] %}
             <form method="post" action="/ui/entity/{{ entity.entity_id }}/approve" class="space-y-3 mb-6">
                 <div>
                     <label class="block text-sm font-medium text-slate-700">Actor</label>
@@ -178,8 +205,32 @@
                     Reject Draft
                 </button>
             </form>
+            {% elif entity.status == "outbox_ready" %}
+            <form method="post" action="/ui/entity/{{ entity.entity_id }}/send-now" class="space-y-3">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700">Actor</label>
+                    <input
+                        type="text"
+                        name="actor"
+                        value="operator@example.internal"
+                        class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                        required
+                    >
+                </div>
+
+                <button
+                    type="submit"
+                    class="w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+                >
+                    Send Now
+                </button>
+            </form>
+            {% elif entity.status == "sent" %}
+                <div class="rounded-lg bg-emerald-50 border border-emerald-200 px-4 py-3">
+                    <p class="text-sm text-emerald-700 font-medium">Message sent successfully.</p>
+                </div>
             {% else %}
-                <p class="text-sm text-slate-500">No draft available for action.</p>
+                <p class="text-sm text-slate-500">No action currently available.</p>
             {% endif %}
         </div>
     </div>
