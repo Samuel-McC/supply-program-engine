@@ -14,6 +14,13 @@ def _draft_event_id(entity_id: str, segment: str) -> str:
     )
 
 
+def _candidate_payload_for_entity(entity_id: str) -> dict:
+    for rec in ledger.read(entity_id=entity_id):
+        if rec.get("event_type") == EventType.CANDIDATE_INGESTED.value:
+            return rec.get("payload") or {}
+    return {}
+
+
 def run_once(limit: int = 50) -> dict:
     processed = 0
     emitted = 0
@@ -39,7 +46,17 @@ def run_once(limit: int = 50) -> dict:
             skipped_duplicates += 1
             continue
 
-        draft = make_draft(draft_id=event_id, entity_id=entity_id, segment=segment)
+        candidate_payload = _candidate_payload_for_entity(entity_id)
+        company_name = candidate_payload.get("company_name", "there")
+        location = candidate_payload.get("location")
+
+        draft = make_draft(
+            draft_id=event_id,
+            entity_id=entity_id,
+            company_name=company_name,
+            location=location,
+            segment=segment,
+        )
 
         ledger.append(
             {

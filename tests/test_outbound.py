@@ -1,3 +1,4 @@
+from src.supply_program_engine.outbound import drafts
 from supply_program_engine import ledger
 from supply_program_engine.config import settings
 from supply_program_engine.models import EventType
@@ -40,5 +41,9 @@ def test_outbound_creates_draft_once(tmp_path, monkeypatch):
     drafts = [e for e in events if e.get("event_type") == EventType.OUTBOUND_DRAFT_CREATED.value]
     assert len(drafts) == 1
     assert "supply program" in drafts[0]["payload"]["subject"].lower()
-    assert drafts[0]["payload"]["template_version"] == "v1"
+    assert len(drafts) == 1
+    assert "supply program" in drafts[0]["payload"]["subject"].lower()
+    assert drafts[0]["payload"]["template_version"] == "v2_merge_fields"
     assert drafts[0]["payload"]["generation_mode"] == "deterministic"
+    assert drafts[0]["payload"]["subject"]
+    assert drafts[0]["payload"]["body"]
