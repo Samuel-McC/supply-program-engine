@@ -35,7 +35,16 @@ def build_pipeline_state() -> Dict[str, PipelineEntityView]:
             view.company_name = payload.get("company_name", view.company_name)
             view.website = payload.get("website", view.website)
             view.location = payload.get("location", view.location)
+
+            view.source = payload.get("source", view.source)
+            view.discovered_via = payload.get("discovered_via", view.discovered_via)
+            view.external_id = payload.get("external_id", view.external_id)
+            view.source_query = payload.get("source_query", view.source_query)
+            view.source_region = payload.get("source_region", view.source_region)
+            view.source_confidence = payload.get("source_confidence", view.source_confidence)
+
             view.status = "candidate_ingested"
+
 
         elif et == EventType.QUALIFICATION_COMPUTED.value:
             view.segment = payload.get("segment", view.segment)

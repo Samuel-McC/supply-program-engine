@@ -25,6 +25,34 @@
                     <div class="text-xs uppercase tracking-wide text-slate-500">Segment</div>
                     <div class="mt-1 font-medium">{{ entity.segment }}</div>
                 </div>
+            
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+        <div>
+            <div class="text-xs uppercase tracking-wide text-slate-500">Source</div>
+            <div class="mt-1">{{ entity.source or "N/A" }}</div>
+        </div>
+        <div>
+            <div class="text-xs uppercase tracking-wide text-slate-500">Discovered Via</div>
+            <div class="mt-1">{{ entity.discovered_via or "N/A" }}</div>
+        </div>
+        <div>
+            <div class="text-xs uppercase tracking-wide text-slate-500">Source Query</div>
+            <div class="mt-1">{{ entity.source_query or "N/A" }}</div>
+        </div>
+        <div>
+            <div class="text-xs uppercase tracking-wide text-slate-500">Source Region</div>
+            <div class="mt-1">{{ entity.source_region or "N/A" }}</div>
+        </div>
+        <div>
+            <div class="text-xs uppercase tracking-wide text-slate-500">External Source ID</div>
+            <div class="mt-1 break-all">{{ entity.external_id or "N/A" }}</div>
+        </div>
+        <div>
+            <div class="text-xs uppercase tracking-wide text-slate-500">Source Confidence</div>
+            <div class="mt-1">{{ entity.source_confidence if entity.source_confidence is not none else "N/A" }}</div>
+        </div>
+    </div>
+        
                 <div>
                     <div class="text-xs uppercase tracking-wide text-slate-500">Priority</div>
                     <div class="mt-1 font-medium">{{ entity.priority_score }}</div>

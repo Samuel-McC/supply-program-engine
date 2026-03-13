@@ -31,10 +31,21 @@ templates = Jinja2Templates(directory="src/supply_program_engine/templates")
 
 
 def _stable_entity_id(candidate: Candidate) -> str:
-    basis = (candidate.website or "").strip().lower()
-    if not basis:
+    """
+    Stable identity preference:
+    1. website
+    2. external_id + source
+    3. company_name + location
+    """
+    if candidate.website and candidate.website.strip():
+        basis = candidate.website.strip().lower()
+    elif candidate.external_id and candidate.source:
+        basis = f"{candidate.source.strip().lower()}|{candidate.external_id.strip().lower()}"
+    else:
         basis = f"{candidate.company_name.strip().lower()}|{candidate.location.strip().lower()}"
+
     return hashlib.sha256(basis.encode("utf-8")).hexdigest()
+
 
 
 def _compute_signature(raw_body: bytes) -> str:

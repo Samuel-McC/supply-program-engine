@@ -23,6 +23,12 @@ class Candidate(BaseModel):
     source: str
     discovered_via: str
 
+    external_id: Optional[str] = None
+    source_query: Optional[str] = None
+    source_region: Optional[str] = None
+    source_confidence: Optional[float] = None
+
+
 
 Segment = Literal[
     "industrial_distributor",
@@ -114,3 +120,10 @@ class PipelineEntityView(BaseModel):
 
     outbox_ready: bool = False
     sent_at: Optional[str] = None
+
+    source: Optional[str] = None
+    discovered_via: Optional[str] = None
+    external_id: Optional[str] = None
+    source_query: Optional[str] = None
+    source_region: Optional[str] = None
+    source_confidence: Optional[float] = None
