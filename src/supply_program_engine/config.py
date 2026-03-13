@@ -19,5 +19,12 @@ class Settings(BaseModel):
     HOST: str = os.getenv("HOST", "0.0.0.0") # nosec B104
     PORT: int = int(os.getenv("PORT", "8000"))
 
+    GOOGLE_PLACES_API_KEY: str | None = os.getenv("GOOGLE_PLACES_API_KEY")
+    GOOGLE_PLACES_TEXT_SEARCH_URL: str = os.getenv(
+        "GOOGLE_PLACES_TEXT_SEARCH_URL",
+        "https://places.googleapis.com/v1/places:searchText",
+)
+
+
 
 settings = Settings()
