@@ -297,6 +297,51 @@
         </div>
 
         <div class="bg-white rounded-xl shadow-sm border p-6">
+            <h3 class="text-lg font-semibold text-slate-900 mb-4">Reply Triage</h3>
+
+            <div class="grid grid-cols-1 gap-4">
+                <div class="rounded-lg border bg-slate-50 p-4">
+                    <div class="text-xs uppercase tracking-wide text-slate-500">Status</div>
+                    <div class="mt-1 font-medium text-slate-900">{{ entity.reply_triage_status or "No replies" }}</div>
+                </div>
+
+                <div class="rounded-lg border bg-slate-50 p-4">
+                    <div class="text-xs uppercase tracking-wide text-slate-500">Latest Classification</div>
+                    <div class="mt-1 text-slate-900">{{ entity.last_reply_classification or "N/A" }}</div>
+                </div>
+
+                <div class="rounded-lg border bg-slate-50 p-4">
+                    <div class="text-xs uppercase tracking-wide text-slate-500">Received At</div>
+                    <div class="mt-1 text-slate-900">{{ entity.last_reply_received_at or "N/A" }}</div>
+                </div>
+
+                <div class="rounded-lg border bg-slate-50 p-4">
+                    <div class="text-xs uppercase tracking-wide text-slate-500">Latest Reply Snippet</div>
+                    <div class="mt-1 text-sm text-slate-900">{{ entity.last_reply_text_snippet or "N/A" }}</div>
+                </div>
+
+                <div class="rounded-lg border bg-slate-50 p-4">
+                    <div class="text-xs uppercase tracking-wide text-slate-500">Reply Status Flags</div>
+                    <ul class="mt-2 space-y-1 text-sm text-slate-700">
+                        <li>lead_interested: {{ "yes" if entity.lead_interested else "no" }}</li>
+                        <li>lead_rejected: {{ "yes" if entity.lead_rejected else "no" }}</li>
+                        <li>unsubscribe_recorded: {{ "yes" if entity.unsubscribe_recorded else "no" }}</li>
+                        <li>out_of_office: {{ "yes" if entity.reply_out_of_office else "no" }}</li>
+                    </ul>
+                </div>
+
+                {% if entity.reply_triage_error_type or entity.reply_triage_error_message %}
+                <div class="rounded-lg border border-red-200 bg-red-50 p-4">
+                    <div class="text-xs uppercase tracking-wide text-red-600">Reply Triage Error</div>
+                    <div class="mt-1 text-sm text-red-700">
+                        {{ entity.reply_triage_error_type or "error" }}{% if entity.reply_triage_error_message %}: {{ entity.reply_triage_error_message }}{% endif %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border p-6">
             <h3 class="text-lg font-semibold text-slate-900 mb-4">Operator Actions</h3>
 
             {% if entity.draft_id and entity.status in ["draft_created", "rejected"] %}

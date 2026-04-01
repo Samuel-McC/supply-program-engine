@@ -22,11 +22,12 @@ from supply_program_engine.config import settings
 from supply_program_engine.enrichment import run_once as enrichment_run_once
 from supply_program_engine.logging import generate_correlation_id, get_logger
 from supply_program_engine.metrics import record_request, snapshot
-from supply_program_engine.models import ApprovalDecision, Candidate, EventType
+from supply_program_engine.models import ApprovalDecision, Candidate, EventType, InboundReply
 from supply_program_engine.orchestrator import run_once as phase3_run_once
 from supply_program_engine.outbound.orchestrator import run_once as outbound_run_once
 from supply_program_engine.outbound.sender import run_once as sender_run_once
 from supply_program_engine.projections import build_pipeline_state, entity_timeline, rank_pipeline
+from supply_program_engine.reply_triage import process_reply
 
 log = get_logger("supply_program_engine")
 templates = Jinja2Templates(directory="src/supply_program_engine/templates")
@@ -220,6 +221,23 @@ def create_app() -> FastAPI:
         cid = getattr(request.state, "correlation_id", generate_correlation_id())
         result = sender_run_once(limit=limit)
         log.info("sender_run_once", extra={"correlation_id": cid, **result})
+        return {"correlation_id": cid, **result}
+
+    @app.post("/reply-triage/ingest")
+    async def reply_triage_ingest(
+        reply: InboundReply,
+        request: Request,
+        x_admin_api_key: Optional[str] = Header(default=None),
+    ):
+        _require_admin_api_key(x_admin_api_key)
+        cid = getattr(request.state, "correlation_id", generate_correlation_id())
+
+        try:
+            result = process_reply(reply, correlation_id=cid)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc))
+
+        log.info("reply_triage_ingest", extra={"correlation_id": cid, **result})
         return {"correlation_id": cid, **result}
 
     @app.post("/outbound/decision")

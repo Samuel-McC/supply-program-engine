@@ -193,3 +193,60 @@ def test_entity_detail_shows_provider_send_information(tmp_path, monkeypatch):
     assert "Provider Send" in response.text
     assert "mock-123" in response.text
     assert "accepted" in response.text
+
+
+def test_entity_detail_shows_reply_triage_section(tmp_path, monkeypatch):
+    client = _client_with_temp_ledger(tmp_path, monkeypatch)
+    _seed_candidate()
+    ledger.append(
+        {
+            "event_id": "entity-1-reply-received",
+            "event_type": EventType.REPLY_RECEIVED.value,
+            "correlation_id": "c1",
+            "entity_id": "entity-1",
+            "payload": {
+                "reply_key": "reply-1",
+                "received_at": "2026-04-01T12:10:00+00:00",
+                "reply_text": "Please unsubscribe me from future emails.",
+                "reply_text_snippet": "Please unsubscribe me from future emails.",
+                "metadata": {},
+            },
+        }
+    )
+    ledger.append(
+        {
+            "event_id": "entity-1-reply-classified",
+            "event_type": EventType.REPLY_CLASSIFIED.value,
+            "correlation_id": "c1",
+            "entity_id": "entity-1",
+            "payload": {
+                "reply_key": "reply-1",
+                "received_at": "2026-04-01T12:10:00+00:00",
+                "reply_text_snippet": "Please unsubscribe me from future emails.",
+                "classification": "unsubscribe",
+                "matched_phrase": "unsubscribe",
+            },
+        }
+    )
+    ledger.append(
+        {
+            "event_id": "entity-1-unsubscribe",
+            "event_type": EventType.UNSUBSCRIBE_RECORDED.value,
+            "correlation_id": "c1",
+            "entity_id": "entity-1",
+            "payload": {
+                "reply_key": "reply-1",
+                "received_at": "2026-04-01T12:10:00+00:00",
+                "reply_text_snippet": "Please unsubscribe me from future emails.",
+                "classification": "unsubscribe",
+                "matched_phrase": "unsubscribe",
+            },
+        }
+    )
+
+    response = client.get("/ui/entity/entity-1")
+
+    assert response.status_code == 200
+    assert "Reply Triage" in response.text
+    assert "unsubscribe" in response.text
+    assert "unsubscribe_recorded: yes" in response.text

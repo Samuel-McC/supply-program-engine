@@ -127,6 +127,29 @@ Qualification and outbound drafting may consume completed enrichment signals whe
 
 ---
 
+## Reply Triage
+
+Inbound replies are ingested through a deterministic reply-triage stage.
+
+The stage emits:
+
+- `reply_received`
+- `reply_classified`
+- `lead_interested`
+- `lead_rejected`
+- `unsubscribe_recorded`
+- `reply_triage_failed`
+
+Phase 20 keeps classification intentionally bounded:
+
+- normalized lowercase text only
+- transparent keyword and phrase matching
+- no model inference
+
+Reply ingestion can link by `entity_id`, `draft_id`, or provider `message_id`, and duplicate payloads resolve to the same deterministic event IDs so replay and retries remain safe.
+
+---
+
 ## Operator Console
 
 The console is implemented with:

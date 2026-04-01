@@ -21,6 +21,12 @@ class EventType(str, Enum):
     OUTBOUND_PROVIDER_SEND_ACCEPTED = "outbound_provider_send_accepted"
     OUTBOUND_PROVIDER_SEND_FAILED = "outbound_provider_send_failed"
     OUTBOUND_SENT = "outbound_sent"
+    REPLY_RECEIVED = "reply_received"
+    REPLY_CLASSIFIED = "reply_classified"
+    LEAD_INTERESTED = "lead_interested"
+    LEAD_REJECTED = "lead_rejected"
+    UNSUBSCRIBE_RECORDED = "unsubscribe_recorded"
+    REPLY_TRIAGE_FAILED = "reply_triage_failed"
 
 
 class Candidate(BaseModel):
@@ -83,6 +89,15 @@ class ApprovalDecision(BaseModel):
     reason: str
 
 
+class InboundReply(BaseModel):
+    entity_id: Optional[str] = None
+    draft_id: Optional[str] = None
+    provider_message_id: Optional[str] = None
+    reply_text: str = Field(min_length=1)
+    received_at: Optional[str] = None
+    metadata: dict[str, object] = Field(default_factory=dict)
+
+
 PipelineStatus = Literal[
     "candidate_ingested",
     "qualified",
@@ -137,6 +152,17 @@ class PipelineEntityView(BaseModel):
     provider_failed_at: Optional[str] = None
     provider_failure_reason: Optional[str] = None
     sent_at: Optional[str] = None
+
+    reply_triage_status: Optional[str] = None
+    last_reply_classification: Optional[str] = None
+    last_reply_received_at: Optional[str] = None
+    last_reply_text_snippet: Optional[str] = None
+    lead_interested: bool = False
+    lead_rejected: bool = False
+    unsubscribe_recorded: bool = False
+    reply_out_of_office: bool = False
+    reply_triage_error_type: Optional[str] = None
+    reply_triage_error_message: Optional[str] = None
 
     enrichment_status: Optional[str] = None
     enrichment_source: Optional[str] = None

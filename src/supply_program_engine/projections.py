@@ -158,6 +158,40 @@ def build_pipeline_state() -> Dict[str, PipelineEntityView]:
             view.sent_at = ts
             view.status = "sent"
 
+        elif et == EventType.REPLY_RECEIVED.value:
+            view.reply_triage_status = "received"
+            view.last_reply_received_at = payload.get("received_at", view.last_reply_received_at)
+            view.last_reply_text_snippet = payload.get("reply_text_snippet", view.last_reply_text_snippet)
+            view.reply_triage_error_type = None
+            view.reply_triage_error_message = None
+
+        elif et == EventType.REPLY_CLASSIFIED.value:
+            classification = payload.get("classification", view.last_reply_classification)
+            view.reply_triage_status = "classified"
+            view.last_reply_classification = classification
+            view.last_reply_received_at = payload.get("received_at", view.last_reply_received_at)
+            view.last_reply_text_snippet = payload.get("reply_text_snippet", view.last_reply_text_snippet)
+            view.reply_out_of_office = classification == "out_of_office"
+            view.reply_triage_error_type = None
+            view.reply_triage_error_message = None
+
+        elif et == EventType.LEAD_INTERESTED.value:
+            view.lead_interested = True
+            view.lead_rejected = False
+
+        elif et == EventType.LEAD_REJECTED.value:
+            view.lead_rejected = True
+            view.lead_interested = False
+
+        elif et == EventType.UNSUBSCRIBE_RECORDED.value:
+            view.unsubscribe_recorded = True
+
+        elif et == EventType.REPLY_TRIAGE_FAILED.value:
+            view.reply_triage_status = "failed"
+            view.last_reply_received_at = payload.get("received_at", view.last_reply_received_at)
+            view.reply_triage_error_type = payload.get("error_type", view.reply_triage_error_type)
+            view.reply_triage_error_message = payload.get("error_message", view.reply_triage_error_message)
+
     return state
 
 

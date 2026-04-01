@@ -194,3 +194,69 @@ def test_ranking_prefers_higher_score_and_lower_risk(tmp_path, monkeypatch):
 
     ranked = rank_pipeline(list(build_pipeline_state().values()))
     assert ranked[0].entity_id == "e2"
+
+
+def test_projection_tracks_reply_triage_state(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "LEDGER_PATH", str(tmp_path / "ledger.jsonl"))
+    monkeypatch.setattr(settings, "LEDGER_BACKEND", "file")
+
+    ledger.append({
+        "event_id": "ing-1",
+        "event_type": EventType.CANDIDATE_INGESTED.value,
+        "correlation_id": "c1",
+        "entity_id": "e1",
+        "payload": {
+            "company_name": "Globex Lumber Distributor",
+            "website": "https://globex.com",
+            "location": "CA",
+            "source": "manual",
+            "discovered_via": "industrial lumber distributor",
+        },
+    })
+    ledger.append({
+        "event_id": "reply-received-1",
+        "event_type": EventType.REPLY_RECEIVED.value,
+        "correlation_id": "c1",
+        "entity_id": "e1",
+        "payload": {
+            "reply_key": "reply-1",
+            "received_at": "2026-04-01T12:10:00+00:00",
+            "reply_text": "Please unsubscribe me from future emails.",
+            "reply_text_snippet": "Please unsubscribe me from future emails.",
+            "metadata": {},
+        },
+    })
+    ledger.append({
+        "event_id": "reply-classified-1",
+        "event_type": EventType.REPLY_CLASSIFIED.value,
+        "correlation_id": "c1",
+        "entity_id": "e1",
+        "payload": {
+            "reply_key": "reply-1",
+            "received_at": "2026-04-01T12:10:00+00:00",
+            "reply_text_snippet": "Please unsubscribe me from future emails.",
+            "classification": "unsubscribe",
+            "matched_phrase": "unsubscribe",
+        },
+    })
+    ledger.append({
+        "event_id": "reply-unsubscribe-1",
+        "event_type": EventType.UNSUBSCRIBE_RECORDED.value,
+        "correlation_id": "c1",
+        "entity_id": "e1",
+        "payload": {
+            "reply_key": "reply-1",
+            "received_at": "2026-04-01T12:10:00+00:00",
+            "reply_text_snippet": "Please unsubscribe me from future emails.",
+            "classification": "unsubscribe",
+            "matched_phrase": "unsubscribe",
+        },
+    })
+
+    state = build_pipeline_state()
+    v = state["e1"]
+    assert v.reply_triage_status == "classified"
+    assert v.last_reply_classification == "unsubscribe"
+    assert v.last_reply_received_at == "2026-04-01T12:10:00+00:00"
+    assert v.last_reply_text_snippet == "Please unsubscribe me from future emails."
+    assert v.unsubscribe_recorded is True
