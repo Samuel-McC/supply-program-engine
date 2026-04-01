@@ -29,6 +29,12 @@ class Settings(BaseModel):
         "ENRICHMENT_USER_AGENT",
         "supply-program-engine-enrichment/1.0",
     )
+    OUTBOUND_PROVIDER: str = os.getenv("OUTBOUND_PROVIDER", "mock")
+    OUTBOUND_DRY_RUN: bool = os.getenv("OUTBOUND_DRY_RUN", "true").lower() == "true"
+    OUTBOUND_FROM_EMAIL: str = os.getenv("OUTBOUND_FROM_EMAIL", "operator@example.internal")
+    OUTBOUND_FROM_NAME: str = os.getenv("OUTBOUND_FROM_NAME", "Supply Program")
+    OUTBOUND_REPLY_TO_EMAIL: str | None = os.getenv("OUTBOUND_REPLY_TO_EMAIL")
+    OUTBOUND_PROVIDER_API_KEY: str | None = os.getenv("OUTBOUND_PROVIDER_API_KEY")
     SEND_POLICY_RISK_THRESHOLD: int = int(os.getenv("SEND_POLICY_RISK_THRESHOLD", "3"))
     SUPPRESSED_ENTITIES: str = os.getenv("SUPPRESSED_ENTITIES", "")
     SUPPRESSED_DOMAINS: str = os.getenv("SUPPRESSED_DOMAINS", "")

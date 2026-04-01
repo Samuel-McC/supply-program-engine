@@ -132,6 +132,25 @@ def build_pipeline_state() -> Dict[str, PipelineEntityView]:
             view.blocked_at = ts or view.blocked_at
             view.status = "send_blocked"
 
+        elif et == EventType.OUTBOUND_PROVIDER_SEND_REQUESTED.value:
+            view.provider_name = payload.get("provider_name", view.provider_name)
+            view.provider_status = payload.get("status", "requested")
+            view.provider_requested_at = payload.get("requested_at", ts or view.provider_requested_at)
+            view.provider_failure_reason = None
+
+        elif et == EventType.OUTBOUND_PROVIDER_SEND_ACCEPTED.value:
+            view.provider_name = payload.get("provider_name", view.provider_name)
+            view.provider_message_id = payload.get("provider_message_id", view.provider_message_id)
+            view.provider_status = payload.get("status", "accepted")
+            view.provider_accepted_at = payload.get("accepted_at", ts or view.provider_accepted_at)
+            view.provider_failure_reason = None
+
+        elif et == EventType.OUTBOUND_PROVIDER_SEND_FAILED.value:
+            view.provider_name = payload.get("provider_name", view.provider_name)
+            view.provider_status = payload.get("status", "failed")
+            view.provider_failed_at = payload.get("failed_at", ts or view.provider_failed_at)
+            view.provider_failure_reason = payload.get("failure_reason", view.provider_failure_reason)
+
         elif et == EventType.OUTBOUND_SENT.value:
             view.outbox_ready = False
             view.blocked_reasons = []

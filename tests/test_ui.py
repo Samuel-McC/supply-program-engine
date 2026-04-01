@@ -152,3 +152,44 @@ def test_entity_detail_shows_enrichment_section(tmp_path, monkeypatch):
     assert "Enrichment" in response.text
     assert "Lone Star Industrial Panels" in response.text
     assert "contact_page_detected: yes" in response.text
+
+
+def test_entity_detail_shows_provider_send_information(tmp_path, monkeypatch):
+    client = _client_with_temp_ledger(tmp_path, monkeypatch)
+    _seed_candidate()
+    ledger.append(
+        {
+            "event_id": "entity-1-provider-requested",
+            "event_type": EventType.OUTBOUND_PROVIDER_SEND_REQUESTED.value,
+            "correlation_id": "c1",
+            "entity_id": "entity-1",
+            "payload": {
+                "draft_id": "draft-1",
+                "provider_name": "mock",
+                "requested_at": "2026-04-01T12:00:00+00:00",
+                "status": "requested",
+            },
+        }
+    )
+    ledger.append(
+        {
+            "event_id": "entity-1-provider-accepted",
+            "event_type": EventType.OUTBOUND_PROVIDER_SEND_ACCEPTED.value,
+            "correlation_id": "c1",
+            "entity_id": "entity-1",
+            "payload": {
+                "draft_id": "draft-1",
+                "provider_name": "mock",
+                "provider_message_id": "mock-123",
+                "accepted_at": "2026-04-01T12:00:01+00:00",
+                "status": "accepted",
+            },
+        }
+    )
+
+    response = client.get("/ui/entity/entity-1")
+
+    assert response.status_code == 200
+    assert "Provider Send" in response.text
+    assert "mock-123" in response.text
+    assert "accepted" in response.text

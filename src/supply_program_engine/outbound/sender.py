@@ -1,25 +1,43 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from supply_program_engine import ledger
+from supply_program_engine.config import settings
 from supply_program_engine.logging import get_logger
 from supply_program_engine.models import EventType
+from supply_program_engine.outbound.providers import get_provider
+from supply_program_engine.outbound.providers.base import ProviderSendRequest
 from supply_program_engine.policy import evaluate_send_policy
 from supply_program_engine.projections import build_pipeline_state
 
 log = get_logger("supply_program_engine")
 
 
+def _draft_event(entity_draft_id: str | None) -> dict | None:
+    if not entity_draft_id:
+        return None
+    return ledger.get(entity_draft_id)
+
+
+def _iso_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
 def run_once(limit: int = 50) -> dict:
     """
-    Simulated safe sender.
+    Provider-backed sender.
 
-    Looks for outbox_ready events and emits outbound_sent once only.
+    Looks for outbox_ready events, enforces policy/idempotency, emits provider
+    lifecycle events, and then emits outbound_sent once accepted.
     """
     processed = 0
     emitted = 0
     blocked = 0
+    failed = 0
     skipped_duplicates = 0
     skipped_unapproved = 0
+    provider = get_provider()
 
     for rec in ledger.read():
         if processed >= limit:
@@ -41,6 +59,12 @@ def run_once(limit: int = 50) -> dict:
 
         entity = build_pipeline_state().get(entity_id)
         if entity is None:
+            skipped_unapproved += 1
+            continue
+
+        draft_event = _draft_event(entity.draft_id)
+        draft_payload = (draft_event or {}).get("payload") or {}
+        if not draft_payload:
             skipped_unapproved += 1
             continue
 
@@ -88,6 +112,117 @@ def run_once(limit: int = 50) -> dict:
             )
             continue
 
+        requested_at = _iso_now()
+        requested_event_id = ledger.generate_event_id(
+            {
+                "event_type": EventType.OUTBOUND_PROVIDER_SEND_REQUESTED.value,
+                "entity_id": entity_id,
+                "draft_id": draft_id,
+                "provider_name": provider.name,
+            }
+        )
+
+        if not ledger.exists(requested_event_id):
+            ledger.append(
+                {
+                    "event_id": requested_event_id,
+                    "event_type": EventType.OUTBOUND_PROVIDER_SEND_REQUESTED.value,
+                    "correlation_id": cid,
+                    "entity_id": entity_id,
+                    "payload": {
+                        "draft_id": draft_id,
+                        "provider_name": provider.name,
+                        "requested_at": requested_at,
+                        "status": "requested",
+                    },
+                }
+            )
+
+        provider_result = provider.send(
+            ProviderSendRequest(
+                draft_id=draft_id,
+                entity_id=entity_id,
+                to_hint=draft_payload.get("to_hint"),
+                subject=draft_payload.get("subject", ""),
+                body=draft_payload.get("body", ""),
+                from_email=settings.OUTBOUND_FROM_EMAIL,
+                from_name=settings.OUTBOUND_FROM_NAME,
+                reply_to_email=settings.OUTBOUND_REPLY_TO_EMAIL,
+            )
+        )
+
+        if not provider_result.accepted:
+            failed_event_id = ledger.generate_event_id(
+                {
+                    "event_type": EventType.OUTBOUND_PROVIDER_SEND_FAILED.value,
+                    "entity_id": entity_id,
+                    "draft_id": draft_id,
+                    "provider_name": provider_result.provider_name,
+                    "failure_reason": provider_result.failure_reason,
+                }
+            )
+
+            if ledger.exists(failed_event_id):
+                skipped_duplicates += 1
+                continue
+
+            ledger.append(
+                {
+                    "event_id": failed_event_id,
+                    "event_type": EventType.OUTBOUND_PROVIDER_SEND_FAILED.value,
+                    "correlation_id": cid,
+                    "entity_id": entity_id,
+                    "payload": {
+                        "draft_id": draft_id,
+                        "provider_name": provider_result.provider_name,
+                        "provider_message_id": provider_result.provider_message_id,
+                        "failed_at": _iso_now(),
+                        "status": provider_result.status,
+                        "failure_reason": provider_result.failure_reason,
+                    },
+                }
+            )
+
+            failed += 1
+            log.warning(
+                "outbound_provider_send_failed",
+                extra={
+                    "correlation_id": cid,
+                    "entity_id": entity_id,
+                    "draft_id": draft_id,
+                    "provider_name": provider_result.provider_name,
+                    "failure_reason": provider_result.failure_reason,
+                },
+            )
+            continue
+
+        accepted_event_id = ledger.generate_event_id(
+            {
+                "event_type": EventType.OUTBOUND_PROVIDER_SEND_ACCEPTED.value,
+                "entity_id": entity_id,
+                "draft_id": draft_id,
+                "provider_name": provider_result.provider_name,
+                "provider_message_id": provider_result.provider_message_id,
+            }
+        )
+
+        if not ledger.exists(accepted_event_id):
+            ledger.append(
+                {
+                    "event_id": accepted_event_id,
+                    "event_type": EventType.OUTBOUND_PROVIDER_SEND_ACCEPTED.value,
+                    "correlation_id": cid,
+                    "entity_id": entity_id,
+                    "payload": {
+                        "draft_id": draft_id,
+                        "provider_name": provider_result.provider_name,
+                        "provider_message_id": provider_result.provider_message_id,
+                        "accepted_at": _iso_now(),
+                        "status": provider_result.status,
+                    },
+                }
+            )
+
         sent_event_id = ledger.generate_event_id(
             {
                 "event_type": EventType.OUTBOUND_SENT.value,
@@ -110,6 +245,8 @@ def run_once(limit: int = 50) -> dict:
                     "draft_id": draft_id,
                     "channel": payload.get("channel", "email"),
                     "status": "sent",
+                    "provider_name": provider_result.provider_name,
+                    "provider_message_id": provider_result.provider_message_id,
                 },
             }
         )
@@ -124,6 +261,7 @@ def run_once(limit: int = 50) -> dict:
         "processed": processed,
         "emitted": emitted,
         "blocked": blocked,
+        "failed": failed,
         "skipped_duplicates": skipped_duplicates,
         "skipped_unapproved": skipped_unapproved,
     }

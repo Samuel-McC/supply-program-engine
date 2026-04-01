@@ -105,6 +105,44 @@
                 </ul>
             </div>
             {% endif %}
+
+            {% if entity.provider_status or entity.provider_name or entity.provider_message_id %}
+            <div class="mt-4 rounded-lg border bg-slate-50 p-4">
+                <div class="text-sm font-semibold text-slate-900">Provider Send</div>
+                <div class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-slate-700">
+                    <div>
+                        <div class="text-xs uppercase tracking-wide text-slate-500">Provider</div>
+                        <div class="mt-1">{{ entity.provider_name or "N/A" }}</div>
+                    </div>
+                    <div>
+                        <div class="text-xs uppercase tracking-wide text-slate-500">Status</div>
+                        <div class="mt-1">{{ entity.provider_status or "N/A" }}</div>
+                    </div>
+                    <div>
+                        <div class="text-xs uppercase tracking-wide text-slate-500">Message ID</div>
+                        <div class="mt-1 break-all">{{ entity.provider_message_id or "N/A" }}</div>
+                    </div>
+                    <div>
+                        <div class="text-xs uppercase tracking-wide text-slate-500">Requested At</div>
+                        <div class="mt-1">{{ entity.provider_requested_at or "N/A" }}</div>
+                    </div>
+                    <div>
+                        <div class="text-xs uppercase tracking-wide text-slate-500">Accepted At</div>
+                        <div class="mt-1">{{ entity.provider_accepted_at or "N/A" }}</div>
+                    </div>
+                    <div>
+                        <div class="text-xs uppercase tracking-wide text-slate-500">Failed At</div>
+                        <div class="mt-1">{{ entity.provider_failed_at or "N/A" }}</div>
+                    </div>
+                </div>
+
+                {% if entity.provider_failure_reason %}
+                <div class="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    {{ entity.provider_failure_reason }}
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
         </div>
 
         <div class="bg-white rounded-xl shadow-sm border p-6">

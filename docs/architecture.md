@@ -58,6 +58,9 @@ Example events:
 - `outbound_approved`
 - `outbox_ready`
 - `outbound_send_blocked`
+- `outbound_provider_send_requested`
+- `outbound_provider_send_accepted`
+- `outbound_provider_send_failed`
 - `outbound_sent`
 
 This ledger acts as the **system of record**.
@@ -98,8 +101,8 @@ The sender:
 1. validates idempotency
 2. evaluates deterministic suppression / policy rules
 3. emits `outbound_send_blocked` when policy conditions fail
-4. sends the email only when policy allows it
-5. emits `outbound_sent`
+4. sends through a provider abstraction and records provider lifecycle events
+5. emits `outbound_sent` only after provider acceptance
 
 External side effects are therefore always tied to ledger events.
 

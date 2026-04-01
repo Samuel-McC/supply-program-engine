@@ -78,6 +78,32 @@ def test_projection_builds_current_state(tmp_path, monkeypatch):
         },
     })
 
+    ledger.append({
+        "event_id": "provider-requested-1",
+        "event_type": EventType.OUTBOUND_PROVIDER_SEND_REQUESTED.value,
+        "correlation_id": "c1",
+        "entity_id": "e1",
+        "payload": {
+            "draft_id": "d-1",
+            "provider_name": "mock",
+            "requested_at": "2026-04-01T12:00:00+00:00",
+            "status": "requested",
+        },
+    })
+    ledger.append({
+        "event_id": "provider-accepted-1",
+        "event_type": EventType.OUTBOUND_PROVIDER_SEND_ACCEPTED.value,
+        "correlation_id": "c1",
+        "entity_id": "e1",
+        "payload": {
+            "draft_id": "d-1",
+            "provider_name": "mock",
+            "provider_message_id": "mock-123",
+            "accepted_at": "2026-04-01T12:00:01+00:00",
+            "status": "accepted",
+        },
+    })
+
     state = build_pipeline_state()
     assert "e1" in state
     v = state["e1"]
@@ -93,6 +119,9 @@ def test_projection_builds_current_state(tmp_path, monkeypatch):
     assert v.enrichment_domain == "globex.com"
     assert v.enrichment_contact_page_detected is True
     assert v.enrichment_distributor_keywords_found is True
+    assert v.provider_name == "mock"
+    assert v.provider_message_id == "mock-123"
+    assert v.provider_status == "accepted"
 
 
 def test_ranking_prefers_higher_score_and_lower_risk(tmp_path, monkeypatch):

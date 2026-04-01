@@ -17,6 +17,9 @@ class EventType(str, Enum):
     OUTBOUND_REJECTED = "outbound_rejected"
     OUTBOX_READY = "outbox_ready"
     OUTBOUND_SEND_BLOCKED = "outbound_send_blocked"
+    OUTBOUND_PROVIDER_SEND_REQUESTED = "outbound_provider_send_requested"
+    OUTBOUND_PROVIDER_SEND_ACCEPTED = "outbound_provider_send_accepted"
+    OUTBOUND_PROVIDER_SEND_FAILED = "outbound_provider_send_failed"
     OUTBOUND_SENT = "outbound_sent"
 
 
@@ -126,6 +129,13 @@ class PipelineEntityView(BaseModel):
     outbox_ready: bool = False
     blocked_reasons: list[str] = Field(default_factory=list)
     blocked_at: Optional[str] = None
+    provider_name: Optional[str] = None
+    provider_message_id: Optional[str] = None
+    provider_status: Optional[str] = None
+    provider_requested_at: Optional[str] = None
+    provider_accepted_at: Optional[str] = None
+    provider_failed_at: Optional[str] = None
+    provider_failure_reason: Optional[str] = None
     sent_at: Optional[str] = None
 
     enrichment_status: Optional[str] = None
