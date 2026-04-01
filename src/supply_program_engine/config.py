@@ -23,7 +23,10 @@ class Settings(BaseModel):
     GOOGLE_PLACES_TEXT_SEARCH_URL: str = os.getenv(
         "GOOGLE_PLACES_TEXT_SEARCH_URL",
         "https://places.googleapis.com/v1/places:searchText",
-)
+    )
+    SEND_POLICY_RISK_THRESHOLD: int = int(os.getenv("SEND_POLICY_RISK_THRESHOLD", "3"))
+    SUPPRESSED_ENTITIES: str = os.getenv("SUPPRESSED_ENTITIES", "")
+    SUPPRESSED_DOMAINS: str = os.getenv("SUPPRESSED_DOMAINS", "")
 
 
 

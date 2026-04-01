@@ -3,6 +3,8 @@ from __future__ import annotations
 from supply_program_engine import ledger
 from supply_program_engine.logging import get_logger
 from supply_program_engine.models import EventType
+from supply_program_engine.policy import evaluate_send_policy
+from supply_program_engine.projections import build_pipeline_state
 
 log = get_logger("supply_program_engine")
 
@@ -15,6 +17,7 @@ def run_once(limit: int = 50) -> dict:
     """
     processed = 0
     emitted = 0
+    blocked = 0
     skipped_duplicates = 0
     skipped_unapproved = 0
 
@@ -34,6 +37,55 @@ def run_once(limit: int = 50) -> dict:
 
         if not draft_id:
             skipped_unapproved += 1
+            continue
+
+        entity = build_pipeline_state().get(entity_id)
+        if entity is None:
+            skipped_unapproved += 1
+            continue
+
+        decision = evaluate_send_policy(entity_id=entity_id, entity=entity)
+        if not decision.allowed:
+            blocked_event_id = ledger.generate_event_id(
+                {
+                    "event_type": EventType.OUTBOUND_SEND_BLOCKED.value,
+                    "entity_id": entity_id,
+                    "draft_id": draft_id,
+                    "blocked_reasons": decision.blocked_reasons,
+                    "policy_version": decision.policy_version,
+                }
+            )
+
+            if ledger.exists(blocked_event_id):
+                skipped_duplicates += 1
+                continue
+
+            ledger.append(
+                {
+                    "event_id": blocked_event_id,
+                    "event_type": EventType.OUTBOUND_SEND_BLOCKED.value,
+                    "correlation_id": cid,
+                    "entity_id": entity_id,
+                    "payload": {
+                        "draft_id": draft_id,
+                        "channel": payload.get("channel", "email"),
+                        "status": "blocked",
+                        "blocked_reasons": decision.blocked_reasons,
+                        "policy_version": decision.policy_version,
+                    },
+                }
+            )
+
+            blocked += 1
+            log.info(
+                "outbound_send_blocked",
+                extra={
+                    "correlation_id": cid,
+                    "entity_id": entity_id,
+                    "draft_id": draft_id,
+                    "blocked_reasons": decision.blocked_reasons,
+                },
+            )
             continue
 
         sent_event_id = ledger.generate_event_id(
@@ -71,6 +123,7 @@ def run_once(limit: int = 50) -> dict:
     return {
         "processed": processed,
         "emitted": emitted,
+        "blocked": blocked,
         "skipped_duplicates": skipped_duplicates,
         "skipped_unapproved": skipped_unapproved,
     }

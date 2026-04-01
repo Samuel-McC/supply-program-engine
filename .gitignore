@@ -2,8 +2,9 @@
 __pycache__/
 *.py[cod]
 
-# Virtual environment
+# Virtual environments
 .venv/
+venv/
 .venv312/
 
 # Pytest
@@ -11,15 +12,18 @@ __pycache__/
 
 # Environment / secrets
 .env
+.env.*
 **/.env
 
-# Local ledger / generated data
+# Local generated data
 data/*.jsonl
 
 # Alembic cache
 alembic/versions/*.pyc
 alembic/versions/__pycache__/
 
-# OS
+# macOS
 .DS_Store
-Thumbs.db
+
+# Editor
+.vscode/

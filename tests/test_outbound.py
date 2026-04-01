@@ -1,4 +1,3 @@
-from src.supply_program_engine.outbound import drafts
 from supply_program_engine import ledger
 from supply_program_engine.config import settings
 from supply_program_engine.models import EventType

@@ -53,6 +53,7 @@ Example events:
 - `draft_created`
 - `outbound_approved`
 - `outbox_ready`
+- `outbound_send_blocked`
 - `outbound_sent`
 
 This ledger acts as the **system of record**.
@@ -78,13 +79,15 @@ This allows:
 ## Outbound Sender
 
 The sender processes events with type:
-
+`outbox_ready`
 
 The sender:
 
 1. validates idempotency
-2. sends the email
-3. emits `outbound_sent`
+2. evaluates deterministic suppression / policy rules
+3. emits `outbound_send_blocked` when policy conditions fail
+4. sends the email only when policy allows it
+5. emits `outbound_sent`
 
 External side effects are therefore always tied to ledger events.
 
@@ -130,5 +133,6 @@ Key principles:
 - append-only audit log
 - idempotent external actions
 - explicit human approval gate
+- deterministic send policy gate before irreversible outbound actions
 - deterministic event IDs
 - minimal external surface area

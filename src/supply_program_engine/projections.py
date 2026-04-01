@@ -82,9 +82,20 @@ def build_pipeline_state() -> Dict[str, PipelineEntityView]:
 
         elif et == EventType.OUTBOX_READY.value:
             view.outbox_ready = True
+            view.blocked_reasons = []
+            view.blocked_at = None
             view.status = "outbox_ready"
 
+        elif et == EventType.OUTBOUND_SEND_BLOCKED.value:
+            view.outbox_ready = False
+            view.blocked_reasons = list(payload.get("blocked_reasons", view.blocked_reasons) or [])
+            view.blocked_at = ts or view.blocked_at
+            view.status = "send_blocked"
+
         elif et == EventType.OUTBOUND_SENT.value:
+            view.outbox_ready = False
+            view.blocked_reasons = []
+            view.blocked_at = None
             view.sent_at = ts
             view.status = "sent"
 
@@ -99,6 +110,7 @@ def rank_pipeline(views: List[PipelineEntityView]) -> List[PipelineEntityView]:
             "draft_created": 4,
             "approved": 3,
             "outbox_ready": 2,
+            "send_blocked": 2,
             "rejected": 1,
             "sent": 0,
         }.get(v.status, 0)

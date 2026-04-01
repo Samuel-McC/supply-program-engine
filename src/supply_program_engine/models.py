@@ -13,6 +13,7 @@ class EventType(str, Enum):
     OUTBOUND_APPROVED = "outbound_approved"
     OUTBOUND_REJECTED = "outbound_rejected"
     OUTBOX_READY = "outbox_ready"
+    OUTBOUND_SEND_BLOCKED = "outbound_send_blocked"
     OUTBOUND_SENT = "outbound_sent"
 
 
@@ -83,6 +84,7 @@ PipelineStatus = Literal[
     "approved",
     "rejected",
     "outbox_ready",
+    "send_blocked",
     "sent",
 ]
 
@@ -119,6 +121,8 @@ class PipelineEntityView(BaseModel):
     compliance_findings: list[str] = Field(default_factory=list)
 
     outbox_ready: bool = False
+    blocked_reasons: list[str] = Field(default_factory=list)
+    blocked_at: Optional[str] = None
     sent_at: Optional[str] = None
 
     source: Optional[str] = None

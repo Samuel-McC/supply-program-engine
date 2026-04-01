@@ -60,3 +60,61 @@ def test_entity_detail_separates_discovery_provenance_card(tmp_path, monkeypatch
     assert "Source Query" in response.text
     assert "External Source ID" in response.text
     assert "Operator Actions" in response.text
+
+
+def test_entity_detail_shows_policy_block_reason(tmp_path, monkeypatch):
+    client = _client_with_temp_ledger(tmp_path, monkeypatch)
+
+    ledger.append(
+        {
+            "event_id": "entity-1-qualified",
+            "event_type": EventType.QUALIFICATION_COMPUTED.value,
+            "correlation_id": "c1",
+            "entity_id": "entity-1",
+            "payload": {
+                "segment": "unknown",
+                "priority_score": 3,
+                "estimated_containers_per_month": 1,
+                "decision_maker_type": "Unknown",
+                "scoring_version": "v2_policy_engine",
+                "risk_score": 2,
+                "requires_manual_review": True,
+                "policy_version": "v1",
+                "compliance_findings": ["manual review required"],
+            },
+        }
+    )
+    ledger.append(
+        {
+            "event_id": "entity-1-ready",
+            "event_type": EventType.OUTBOX_READY.value,
+            "correlation_id": "c1",
+            "entity_id": "entity-1",
+            "payload": {
+                "draft_id": "draft-1",
+                "channel": "email",
+                "status": "ready",
+            },
+        }
+    )
+    ledger.append(
+        {
+            "event_id": "entity-1-blocked",
+            "event_type": EventType.OUTBOUND_SEND_BLOCKED.value,
+            "correlation_id": "c1",
+            "entity_id": "entity-1",
+            "payload": {
+                "draft_id": "draft-1",
+                "channel": "email",
+                "status": "blocked",
+                "blocked_reasons": ["requires_manual_review"],
+                "policy_version": "send_policy_v1",
+            },
+        }
+    )
+
+    response = client.get("/ui/entity/entity-1")
+
+    assert response.status_code == 200
+    assert "Send blocked by policy gate" in response.text
+    assert "requires_manual_review" in response.text
