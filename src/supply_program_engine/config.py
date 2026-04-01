@@ -24,6 +24,11 @@ class Settings(BaseModel):
         "GOOGLE_PLACES_TEXT_SEARCH_URL",
         "https://places.googleapis.com/v1/places:searchText",
     )
+    ENRICHMENT_FETCH_TIMEOUT_SECONDS: int = int(os.getenv("ENRICHMENT_FETCH_TIMEOUT_SECONDS", "5"))
+    ENRICHMENT_USER_AGENT: str = os.getenv(
+        "ENRICHMENT_USER_AGENT",
+        "supply-program-engine-enrichment/1.0",
+    )
     SEND_POLICY_RISK_THRESHOLD: int = int(os.getenv("SEND_POLICY_RISK_THRESHOLD", "3"))
     SUPPRESSED_ENTITIES: str = os.getenv("SUPPRESSED_ENTITIES", "")
     SUPPRESSED_DOMAINS: str = os.getenv("SUPPRESSED_DOMAINS", "")

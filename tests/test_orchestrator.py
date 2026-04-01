@@ -95,3 +95,54 @@ def test_orchestrator_unknown_goes_manual_review_path(tmp_path, monkeypatch):
     assert quals[0]["payload"]["scoring_version"] == "v2_policy_engine"
     assert quals[0]["payload"]["requires_manual_review"] is True
     assert quals[0]["payload"]["risk_score"] >= 1
+
+
+def test_orchestrator_uses_enrichment_evidence_when_available(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "LEDGER_PATH", str(tmp_path / "ledger.jsonl"))
+    monkeypatch.setattr(settings, "LEDGER_BACKEND", "file")
+
+    ledger.append(
+        {
+            "event_id": "ing-1",
+            "event_type": "candidate_ingested",
+            "correlation_id": "c1",
+            "entity_id": "entity-1",
+            "payload": {
+                "company_name": "Acme Supply",
+                "website": "https://acmesupply.com",
+                "location": "TX",
+                "source": "manual",
+                "discovered_via": "unknown",
+            },
+        }
+    )
+    ledger.append(
+        {
+            "event_id": "enrich-1",
+            "event_type": "enrichment_completed",
+            "correlation_id": "c1",
+            "entity_id": "entity-1",
+            "payload": {
+                "signal_version": "enrichment_v1",
+                "source": "website_fetch",
+                "domain": "acmesupply.com",
+                "website_present": True,
+                "fetch_succeeded": True,
+                "website_title": "Acme Industrial Distributor",
+                "meta_description": "Commercial distributor and contractor supply partner",
+                "contact_page_detected": True,
+                "construction_keywords_found": False,
+                "distributor_keywords_found": True,
+                "likely_b2b": True,
+                "matched_keywords": ["contractor", "distributor"],
+            },
+        }
+    )
+
+    run_once(limit=10)
+
+    events = list(ledger.read())
+    quals = [e for e in events if e.get("event_type") == "qualification_computed"]
+    assert len(quals) == 1
+    assert quals[0]["payload"]["segment"] == "industrial_distributor"
+    assert "enrichment_distributor_keywords_found" in quals[0]["payload"]["evidence"]

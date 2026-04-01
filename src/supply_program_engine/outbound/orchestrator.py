@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from supply_program_engine import ledger
+from supply_program_engine.enrichment import latest_completed_enrichment
 from supply_program_engine.logging import generate_correlation_id, get_logger
 from supply_program_engine.models import EventType
 from supply_program_engine.outbound.drafts import make_draft
@@ -8,9 +9,14 @@ from supply_program_engine.outbound.drafts import make_draft
 log = get_logger("supply_program_engine")
 
 
-def _draft_event_id(entity_id: str, segment: str) -> str:
+def _draft_event_id(entity_id: str, segment: str, qualification_event_id: str) -> str:
     return ledger.generate_event_id(
-        {"event_type": EventType.OUTBOUND_DRAFT_CREATED.value, "entity_id": entity_id, "segment": segment}
+        {
+            "event_type": EventType.OUTBOUND_DRAFT_CREATED.value,
+            "entity_id": entity_id,
+            "segment": segment,
+            "qualification_event_id": qualification_event_id,
+        }
     )
 
 
@@ -39,14 +45,20 @@ def run_once(limit: int = 50) -> dict:
         entity_id = rec.get("entity_id") or "unknown"
         q_payload = rec.get("payload") or {}
         segment = q_payload.get("segment", "unknown")
+        qualification_event_id = rec.get("event_id") or "unknown"
 
-        event_id = _draft_event_id(entity_id=entity_id, segment=segment)
+        event_id = _draft_event_id(
+            entity_id=entity_id,
+            segment=segment,
+            qualification_event_id=qualification_event_id,
+        )
 
         if ledger.exists(event_id):
             skipped_duplicates += 1
             continue
 
         candidate_payload = _candidate_payload_for_entity(entity_id)
+        enrichment = latest_completed_enrichment(entity_id)
         company_name = candidate_payload.get("company_name", "there")
         location = candidate_payload.get("location")
 
@@ -56,6 +68,7 @@ def run_once(limit: int = 50) -> dict:
             company_name=company_name,
             location=location,
             segment=segment,
+            enrichment_signals=(enrichment or {}).get("payload"),
         )
 
         ledger.append(

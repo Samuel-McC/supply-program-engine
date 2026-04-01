@@ -45,6 +45,13 @@ def build_pipeline_state() -> Dict[str, PipelineEntityView]:
 
             view.status = "candidate_ingested"
 
+        elif et == EventType.ENRICHMENT_STARTED.value:
+            view.enrichment_status = "started"
+            view.enrichment_source = payload.get("source", view.enrichment_source)
+            view.enrichment_version = payload.get("signal_version", view.enrichment_version)
+            view.enrichment_website_present = bool(payload.get("website_present", view.enrichment_website_present))
+            view.enrichment_error_type = None
+            view.enrichment_error_message = None
 
         elif et == EventType.QUALIFICATION_COMPUTED.value:
             view.segment = payload.get("segment", view.segment)
@@ -61,6 +68,39 @@ def build_pipeline_state() -> Dict[str, PipelineEntityView]:
             view.policy_version = payload.get("policy_version", view.policy_version)
             view.compliance_findings = payload.get("compliance_findings", view.compliance_findings)
             view.status = "qualified"
+
+        elif et == EventType.ENRICHMENT_COMPLETED.value:
+            view.enrichment_status = "completed"
+            view.enrichment_source = payload.get("source", view.enrichment_source)
+            view.enrichment_version = payload.get("signal_version", view.enrichment_version)
+            view.enrichment_domain = payload.get("domain", view.enrichment_domain)
+            view.enrichment_website_present = bool(payload.get("website_present", view.enrichment_website_present))
+            view.enrichment_fetch_succeeded = bool(payload.get("fetch_succeeded", view.enrichment_fetch_succeeded))
+            view.enrichment_contact_page_detected = bool(
+                payload.get("contact_page_detected", view.enrichment_contact_page_detected)
+            )
+            view.enrichment_construction_keywords_found = bool(
+                payload.get("construction_keywords_found", view.enrichment_construction_keywords_found)
+            )
+            view.enrichment_distributor_keywords_found = bool(
+                payload.get("distributor_keywords_found", view.enrichment_distributor_keywords_found)
+            )
+            view.enrichment_likely_b2b = bool(payload.get("likely_b2b", view.enrichment_likely_b2b))
+            view.enrichment_matched_keywords = list(payload.get("matched_keywords", view.enrichment_matched_keywords))
+            view.enrichment_website_title = payload.get("website_title", view.enrichment_website_title)
+            view.enrichment_meta_description = payload.get("meta_description", view.enrichment_meta_description)
+            view.enrichment_error_type = None
+            view.enrichment_error_message = None
+
+        elif et == EventType.ENRICHMENT_FAILED.value:
+            view.enrichment_status = "failed"
+            view.enrichment_source = payload.get("source", view.enrichment_source)
+            view.enrichment_version = payload.get("signal_version", view.enrichment_version)
+            view.enrichment_domain = payload.get("domain", view.enrichment_domain)
+            view.enrichment_website_present = bool(payload.get("website_present", view.enrichment_website_present))
+            view.enrichment_fetch_succeeded = False
+            view.enrichment_error_type = payload.get("error_type", view.enrichment_error_type)
+            view.enrichment_error_message = payload.get("error_message", view.enrichment_error_message)
 
         elif et == EventType.OUTBOUND_DRAFT_CREATED.value:
             view.draft_id = payload.get("draft_id", view.draft_id) or rec.get("event_id")

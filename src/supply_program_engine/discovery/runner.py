@@ -9,6 +9,7 @@ from .sources.google_places import discover_text_search
 
 BASE_URL = "http://127.0.0.1:8000"
 INGRESS_ENDPOINT = f"{BASE_URL}/ingress/candidate"
+ENRICHMENT_ENDPOINT = f"{BASE_URL}/enrichment/run-once?limit=50"
 ORCHESTRATOR_ENDPOINT = f"{BASE_URL}/orchestrator/run-once?limit=50"
 OUTBOUND_ENDPOINT = f"{BASE_URL}/outbound/run-once?limit=50"
 
@@ -42,6 +43,15 @@ def _ingest_companies(companies: list) -> list[dict]:
 
 
 def _advance_pipeline() -> dict:
+    enrichment_response = requests.post(
+        ENRICHMENT_ENDPOINT,
+        timeout=10,
+    )
+    try:
+        enrichment_body = enrichment_response.json()
+    except Exception:
+        enrichment_body = {"raw": enrichment_response.text}
+
     orchestrator_response = requests.post(
         ORCHESTRATOR_ENDPOINT,
         timeout=10,
@@ -61,6 +71,10 @@ def _advance_pipeline() -> dict:
         outbound_body = {"raw": outbound_response.text}
 
     return {
+        "enrichment": {
+            "status_code": enrichment_response.status_code,
+            "response": enrichment_body,
+        },
         "orchestrator": {
             "status_code": orchestrator_response.status_code,
             "response": orchestrator_body,

@@ -19,6 +19,7 @@ from supply_program_engine.models import ApprovalDecision
 
 from supply_program_engine import ledger
 from supply_program_engine.config import settings
+from supply_program_engine.enrichment import run_once as enrichment_run_once
 from supply_program_engine.logging import generate_correlation_id, get_logger
 from supply_program_engine.metrics import record_request, snapshot
 from supply_program_engine.models import ApprovalDecision, Candidate, EventType
@@ -183,6 +184,18 @@ def create_app() -> FastAPI:
         cid = getattr(request.state, "correlation_id", generate_correlation_id())
         result = phase3_run_once(limit=limit)
         log.info("orchestrator_run_once", extra={"correlation_id": cid, **result})
+        return {"correlation_id": cid, **result}
+
+    @app.post("/enrichment/run-once")
+    async def enrichment_run_once_endpoint(
+        request: Request,
+        limit: int = 50,
+        x_admin_api_key: Optional[str] = Header(default=None),
+    ):
+        _require_admin_api_key(x_admin_api_key)
+        cid = getattr(request.state, "correlation_id", generate_correlation_id())
+        result = enrichment_run_once(limit=limit)
+        log.info("enrichment_run_once", extra={"correlation_id": cid, **result})
         return {"correlation_id": cid, **result}
 
     @app.post("/outbound/run-once")

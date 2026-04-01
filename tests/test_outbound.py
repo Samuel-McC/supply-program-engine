@@ -46,3 +46,73 @@ def test_outbound_creates_draft_once(tmp_path, monkeypatch):
     assert drafts[0]["payload"]["generation_mode"] == "deterministic"
     assert drafts[0]["payload"]["subject"]
     assert drafts[0]["payload"]["body"]
+
+
+def test_outbound_uses_enrichment_signals_when_available(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "LEDGER_PATH", str(tmp_path / "ledger.jsonl"))
+    monkeypatch.setattr(settings, "LEDGER_BACKEND", "file")
+
+    ledger.append(
+        {
+            "event_id": "candidate-1",
+            "event_type": EventType.CANDIDATE_INGESTED.value,
+            "correlation_id": "c1",
+            "entity_id": "entity-1",
+            "payload": {
+                "company_name": "Acme Supply",
+                "website": "https://acmesupply.com",
+                "location": "TX",
+                "source": "manual",
+                "discovered_via": "unknown",
+            },
+        }
+    )
+    ledger.append(
+        {
+            "event_id": "enrich-1",
+            "event_type": EventType.ENRICHMENT_COMPLETED.value,
+            "correlation_id": "c1",
+            "entity_id": "entity-1",
+            "payload": {
+                "signal_version": "enrichment_v1",
+                "source": "website_fetch",
+                "domain": "acmesupply.com",
+                "website_present": True,
+                "fetch_succeeded": True,
+                "website_title": "Acme Industrial Distributor",
+                "meta_description": "Commercial distributor and contractor supply partner",
+                "contact_page_detected": True,
+                "construction_keywords_found": False,
+                "distributor_keywords_found": True,
+                "likely_b2b": True,
+                "matched_keywords": ["contractor", "distributor"],
+            },
+        }
+    )
+    ledger.append(
+        {
+            "event_id": "q-1",
+            "event_type": EventType.QUALIFICATION_COMPUTED.value,
+            "correlation_id": "c1",
+            "entity_id": "entity-1",
+            "payload": {
+                "segment": "industrial_distributor",
+                "priority_score": 10,
+                "estimated_containers_per_month": 30,
+                "decision_maker_type": "Procurement",
+                "scoring_version": "v2_policy_engine",
+                "evidence": ["matched keyword: distributor"],
+                "risk_score": 0,
+                "requires_manual_review": False,
+                "policy_version": "v1",
+                "compliance_findings": ["no compliance issues detected"],
+            },
+        }
+    )
+
+    run_once(limit=10)
+
+    events = list(ledger.read())
+    drafts = [e for e in events if e.get("event_type") == EventType.OUTBOUND_DRAFT_CREATED.value]
+    assert len(drafts) == 1
+    assert "distributor-led procurement activity" in drafts[0]["payload"]["body"]

@@ -5,6 +5,7 @@
 Supply Program Engine is a secure outbound automation system designed to:
 
 - ingest candidate companies
+- enrich safe public website and domain signals
 - evaluate scoring and compliance signals
 - generate outreach drafts
 - require explicit human approval
@@ -48,6 +49,9 @@ Characteristics:
 Example events:
 
 - `candidate_ingested`
+- `enrichment_started`
+- `enrichment_completed`
+- `enrichment_failed`
 - `scored`
 - `compliance_checked`
 - `draft_created`
@@ -74,6 +78,14 @@ This allows:
 - deterministic state reconstruction
 - auditability
 
+Enrichment projections expose structured company intelligence such as:
+
+- website presence
+- domain
+- contact page detection
+- construction and distributor keyword signals
+- likely B2B fit
+
 ---
 
 ## Outbound Sender
@@ -90,6 +102,25 @@ The sender:
 5. emits `outbound_sent`
 
 External side effects are therefore always tied to ledger events.
+
+---
+
+## Enrichment Engine
+
+The enrichment stage processes `candidate_ingested` events and emits one of:
+
+- `enrichment_started`
+- `enrichment_completed`
+- `enrichment_failed`
+
+The phase is intentionally bounded:
+
+- safe public website fetch only when a website exists
+- title and meta description extraction
+- deterministic keyword heuristics
+- structured payloads only, not raw page-content blobs
+
+Qualification and outbound drafting may consume completed enrichment signals when available, but the enrichment stage remains replayable and idempotent on its own.
 
 ---
 

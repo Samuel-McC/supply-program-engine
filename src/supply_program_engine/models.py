@@ -8,6 +8,9 @@ from pydantic import BaseModel, Field
 
 class EventType(str, Enum):
     CANDIDATE_INGESTED = "candidate_ingested"
+    ENRICHMENT_STARTED = "enrichment_started"
+    ENRICHMENT_COMPLETED = "enrichment_completed"
+    ENRICHMENT_FAILED = "enrichment_failed"
     QUALIFICATION_COMPUTED = "qualification_computed"
     OUTBOUND_DRAFT_CREATED = "outbound_draft_created"
     OUTBOUND_APPROVED = "outbound_approved"
@@ -124,6 +127,22 @@ class PipelineEntityView(BaseModel):
     blocked_reasons: list[str] = Field(default_factory=list)
     blocked_at: Optional[str] = None
     sent_at: Optional[str] = None
+
+    enrichment_status: Optional[str] = None
+    enrichment_source: Optional[str] = None
+    enrichment_version: Optional[str] = None
+    enrichment_domain: Optional[str] = None
+    enrichment_website_present: bool = False
+    enrichment_fetch_succeeded: bool = False
+    enrichment_contact_page_detected: bool = False
+    enrichment_construction_keywords_found: bool = False
+    enrichment_distributor_keywords_found: bool = False
+    enrichment_likely_b2b: bool = False
+    enrichment_matched_keywords: list[str] = Field(default_factory=list)
+    enrichment_website_title: Optional[str] = None
+    enrichment_meta_description: Optional[str] = None
+    enrichment_error_type: Optional[str] = None
+    enrichment_error_message: Optional[str] = None
 
     source: Optional[str] = None
     discovered_via: Optional[str] = None

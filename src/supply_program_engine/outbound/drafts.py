@@ -73,6 +73,7 @@ def make_draft(
     company_name: str,
     location: str | None,
     segment: str,
+    enrichment_signals: dict | None = None,
 ) -> OutboundDraft:
     subject_template, body_template = build_email_template(segment=segment)
 
@@ -84,6 +85,14 @@ def make_draft(
 
     subject = render_template(subject_template, context)
     body = render_template(body_template, context)
+
+    if enrichment_signals:
+        if enrichment_signals.get("distributor_keywords_found"):
+            body += "\n\nYour public website suggests active distributor-led procurement activity."
+        elif enrichment_signals.get("construction_keywords_found"):
+            body += "\n\nYour public website suggests active construction or formwork-related operations."
+        elif enrichment_signals.get("likely_b2b"):
+            body += "\n\nYour public website suggests a B2B operating profile."
 
     return OutboundDraft(
         draft_id=draft_id,

@@ -42,6 +42,27 @@ def test_projection_builds_current_state(tmp_path, monkeypatch):
     })
 
     ledger.append({
+        "event_id": "enrich-1",
+        "event_type": EventType.ENRICHMENT_COMPLETED.value,
+        "correlation_id": "c1",
+        "entity_id": "e1",
+        "payload": {
+            "signal_version": "enrichment_v1",
+            "source": "website_fetch",
+            "domain": "globex.com",
+            "website_present": True,
+            "fetch_succeeded": True,
+            "website_title": "Globex Lumber Distributor",
+            "meta_description": "Commercial distributor and contractor supply partner",
+            "contact_page_detected": True,
+            "construction_keywords_found": False,
+            "distributor_keywords_found": True,
+            "likely_b2b": True,
+            "matched_keywords": ["contractor", "distributor"],
+        },
+    })
+
+    ledger.append({
         "event_id": "d-1",
         "event_type": EventType.OUTBOUND_DRAFT_CREATED.value,
         "correlation_id": "c1",
@@ -68,6 +89,10 @@ def test_projection_builds_current_state(tmp_path, monkeypatch):
     assert v.template_version == "v1"
     assert v.risk_score == 0
     assert v.requires_manual_review is False
+    assert v.enrichment_status == "completed"
+    assert v.enrichment_domain == "globex.com"
+    assert v.enrichment_contact_page_detected is True
+    assert v.enrichment_distributor_keywords_found is True
 
 
 def test_ranking_prefers_higher_score_and_lower_risk(tmp_path, monkeypatch):

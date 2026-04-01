@@ -118,3 +118,37 @@ def test_entity_detail_shows_policy_block_reason(tmp_path, monkeypatch):
     assert response.status_code == 200
     assert "Send blocked by policy gate" in response.text
     assert "requires_manual_review" in response.text
+
+
+def test_entity_detail_shows_enrichment_section(tmp_path, monkeypatch):
+    client = _client_with_temp_ledger(tmp_path, monkeypatch)
+    _seed_candidate()
+    ledger.append(
+        {
+            "event_id": "entity-1-enrichment",
+            "event_type": EventType.ENRICHMENT_COMPLETED.value,
+            "correlation_id": "c1",
+            "entity_id": "entity-1",
+            "payload": {
+                "signal_version": "enrichment_v1",
+                "source": "website_fetch",
+                "domain": "lonestarpanels-example.com",
+                "website_present": True,
+                "fetch_succeeded": True,
+                "website_title": "Lone Star Industrial Panels",
+                "meta_description": "Commercial distributor and contractor supply partner",
+                "contact_page_detected": True,
+                "construction_keywords_found": True,
+                "distributor_keywords_found": True,
+                "likely_b2b": True,
+                "matched_keywords": ["construction", "distributor"],
+            },
+        }
+    )
+
+    response = client.get("/ui/entity/entity-1")
+
+    assert response.status_code == 200
+    assert "Enrichment" in response.text
+    assert "Lone Star Industrial Panels" in response.text
+    assert "contact_page_detected: yes" in response.text
