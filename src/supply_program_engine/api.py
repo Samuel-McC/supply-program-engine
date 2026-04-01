@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 import hashlib
 import hmac
 import json
@@ -337,6 +338,38 @@ def create_app() -> FastAPI:
                 "candidates": ranked,
             },
     )
+
+    @app.get("/ui/discovery", response_class=HTMLResponse)
+    async def ui_discovery(request: Request):
+        state = build_pipeline_state()
+        discovered = [
+            view
+            for view in rank_pipeline(list(state.values()))
+            if view.source or view.discovered_via or view.source_query or view.external_id
+        ]
+
+        source_counts = Counter(view.source for view in discovered if view.source)
+        region_counts = Counter(view.source_region for view in discovered if view.source_region)
+        query_counts = Counter(view.source_query for view in discovered if view.source_query)
+
+        summary = {
+            "total": len(discovered),
+            "sources": len(source_counts),
+            "regions": len(region_counts),
+            "manual_review": len([view for view in discovered if view.requires_manual_review]),
+        }
+
+        return templates.TemplateResponse(
+            "discovery.html",
+            {
+                "request": request,
+                "summary": summary,
+                "entities": discovered,
+                "source_counts": source_counts.most_common(),
+                "region_counts": region_counts.most_common(),
+                "query_counts": query_counts.most_common(5),
+            },
+        )
 
 
     @app.get("/ui/metrics", response_class=HTMLResponse)

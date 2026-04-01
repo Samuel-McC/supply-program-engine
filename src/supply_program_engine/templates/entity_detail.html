@@ -6,13 +6,17 @@
 </div>
 
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
     <div class="lg:col-span-2 space-y-6">
         <div class="bg-white rounded-xl shadow-sm border p-6">
             <div class="flex items-start justify-between">
                 <div>
                     <h2 class="text-2xl font-bold text-slate-900">{{ entity.company_name }}</h2>
                     <p class="text-slate-500 mt-1">{{ entity.location or "Unknown location" }}</p>
+                    {% if entity.website %}
+                    <a href="{{ entity.website }}" class="mt-2 inline-block text-sm text-blue-600 hover:underline">
+                        {{ entity.website }}
+                    </a>
+                    {% endif %}
                 </div>
 
                 <span class="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
@@ -20,39 +24,11 @@
                 </span>
             </div>
 
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mt-6">
                 <div>
                     <div class="text-xs uppercase tracking-wide text-slate-500">Segment</div>
                     <div class="mt-1 font-medium">{{ entity.segment }}</div>
                 </div>
-            
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
-        <div>
-            <div class="text-xs uppercase tracking-wide text-slate-500">Source</div>
-            <div class="mt-1">{{ entity.source or "N/A" }}</div>
-        </div>
-        <div>
-            <div class="text-xs uppercase tracking-wide text-slate-500">Discovered Via</div>
-            <div class="mt-1">{{ entity.discovered_via or "N/A" }}</div>
-        </div>
-        <div>
-            <div class="text-xs uppercase tracking-wide text-slate-500">Source Query</div>
-            <div class="mt-1">{{ entity.source_query or "N/A" }}</div>
-        </div>
-        <div>
-            <div class="text-xs uppercase tracking-wide text-slate-500">Source Region</div>
-            <div class="mt-1">{{ entity.source_region or "N/A" }}</div>
-        </div>
-        <div>
-            <div class="text-xs uppercase tracking-wide text-slate-500">External Source ID</div>
-            <div class="mt-1 break-all">{{ entity.external_id or "N/A" }}</div>
-        </div>
-        <div>
-            <div class="text-xs uppercase tracking-wide text-slate-500">Source Confidence</div>
-            <div class="mt-1">{{ entity.source_confidence if entity.source_confidence is not none else "N/A" }}</div>
-        </div>
-    </div>
-        
                 <div>
                     <div class="text-xs uppercase tracking-wide text-slate-500">Priority</div>
                     <div class="mt-1 font-medium">{{ entity.priority_score }}</div>
@@ -170,6 +146,43 @@
     </div>
 
     <div class="space-y-6">
+        <div class="bg-white rounded-xl shadow-sm border p-6">
+            <h3 class="text-lg font-semibold text-slate-900 mb-4">Discovery Provenance</h3>
+
+            <div class="grid grid-cols-1 gap-4">
+                <div class="rounded-lg border bg-slate-50 p-4">
+                    <div class="text-xs uppercase tracking-wide text-slate-500">Source</div>
+                    <div class="mt-1 font-medium text-slate-900">{{ entity.source or "N/A" }}</div>
+                </div>
+                <div class="rounded-lg border bg-slate-50 p-4">
+                    <div class="text-xs uppercase tracking-wide text-slate-500">Discovered Via</div>
+                    <div class="mt-1 font-medium text-slate-900">{{ entity.discovered_via or "N/A" }}</div>
+                </div>
+                <div class="rounded-lg border bg-slate-50 p-4">
+                    <div class="text-xs uppercase tracking-wide text-slate-500">Source Query</div>
+                    <div class="mt-1 text-slate-900">{{ entity.source_query or "N/A" }}</div>
+                </div>
+                <div class="rounded-lg border bg-slate-50 p-4">
+                    <div class="text-xs uppercase tracking-wide text-slate-500">Source Region</div>
+                    <div class="mt-1 text-slate-900">{{ entity.source_region or "N/A" }}</div>
+                </div>
+                <div class="rounded-lg border bg-slate-50 p-4">
+                    <div class="text-xs uppercase tracking-wide text-slate-500">External Source ID</div>
+                    <div class="mt-1 break-all text-slate-900">{{ entity.external_id or "N/A" }}</div>
+                </div>
+                <div class="rounded-lg border bg-slate-50 p-4">
+                    <div class="text-xs uppercase tracking-wide text-slate-500">Source Confidence</div>
+                    <div class="mt-1 text-slate-900">
+                        {% if entity.source_confidence is not none %}
+                            {{ "%.2f"|format(entity.source_confidence) }}
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="bg-white rounded-xl shadow-sm border p-6">
             <h3 class="text-lg font-semibold text-slate-900 mb-4">Operator Actions</h3>
 

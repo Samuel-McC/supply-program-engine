@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="mb-8">
+    <h2 class="text-3xl font-bold text-slate-900">Discovery Dashboard</h2>
+    <p class="mt-2 text-slate-500">Operator view of discovery provenance, source mix, and current downstream status.</p>
+</div>
+
+<div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+    <div class="bg-white rounded-xl shadow-sm border p-5">
+        <div class="text-sm text-slate-500">Discovered Entities</div>
+        <div class="mt-1 text-2xl font-bold text-slate-900">{{ summary.total }}</div>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border p-5">
+        <div class="text-sm text-slate-500">Active Sources</div>
+        <div class="mt-1 text-2xl font-bold text-slate-900">{{ summary.sources }}</div>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border p-5">
+        <div class="text-sm text-slate-500">Discovery Regions</div>
+        <div class="mt-1 text-2xl font-bold text-slate-900">{{ summary.regions }}</div>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border p-5">
+        <div class="text-sm text-slate-500">Manual Review</div>
+        <div class="mt-1 text-2xl font-bold text-amber-600">{{ summary.manual_review }}</div>
+    </div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+    <div class="bg-white rounded-xl shadow-sm border p-6">
+        <h3 class="text-lg font-semibold text-slate-900 mb-4">Source Mix</h3>
+        {% if source_counts %}
+            <div class="space-y-3">
+                {% for source, count in source_counts %}
+                <div class="flex items-center justify-between rounded-lg border bg-slate-50 px-4 py-3">
+                    <span class="text-sm font-medium text-slate-700">{{ source }}</span>
+                    <span class="inline-flex items-center rounded-full bg-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-700">{{ count }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p class="text-sm text-slate-500">No discovery source metadata recorded yet.</p>
+        {% endif %}
+    </div>
+
+    <div class="bg-white rounded-xl shadow-sm border p-6">
+        <h3 class="text-lg font-semibold text-slate-900 mb-4">Top Queries</h3>
+        {% if query_counts %}
+            <div class="space-y-3">
+                {% for query, count in query_counts %}
+                <div class="flex items-center justify-between rounded-lg border bg-slate-50 px-4 py-3">
+                    <span class="text-sm font-medium text-slate-700">{{ query }}</span>
+                    <span class="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-1 text-xs font-semibold text-blue-700">{{ count }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p class="text-sm text-slate-500">No discovery queries recorded yet.</p>
+        {% endif %}
+    </div>
+
+    <div class="bg-white rounded-xl shadow-sm border p-6">
+        <h3 class="text-lg font-semibold text-slate-900 mb-4">Regions</h3>
+        {% if region_counts %}
+            <div class="space-y-3">
+                {% for region, count in region_counts %}
+                <div class="flex items-center justify-between rounded-lg border bg-slate-50 px-4 py-3">
+                    <span class="text-sm font-medium text-slate-700">{{ region }}</span>
+                    <span class="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700">{{ count }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p class="text-sm text-slate-500">No discovery regions recorded yet.</p>
+        {% endif %}
+    </div>
+</div>
+
+<div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+    <div class="border-b bg-slate-50 px-6 py-4">
+        <h3 class="text-lg font-semibold text-slate-900">Discovery Entities</h3>
+        <p class="mt-1 text-sm text-slate-500">Current entities with provenance visible to the operator.</p>
+    </div>
+
+    {% if entities %}
+    <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+            <thead class="bg-slate-50 border-b">
+                <tr>
+                    <th class="p-4 text-left font-semibold text-slate-700">Company</th>
+                    <th class="p-4 text-left font-semibold text-slate-700">Source</th>
+                    <th class="p-4 text-left font-semibold text-slate-700">Query</th>
+                    <th class="p-4 text-left font-semibold text-slate-700">Region</th>
+                    <th class="p-4 text-left font-semibold text-slate-700">Confidence</th>
+                    <th class="p-4 text-left font-semibold text-slate-700">Status</th>
+                    <th class="p-4 text-left font-semibold text-slate-700">Open</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for entity in entities %}
+                <tr class="border-b last:border-b-0 hover:bg-slate-50">
+                    <td class="p-4">
+                        <div class="font-medium text-slate-900">{{ entity.company_name }}</div>
+                        <div class="mt-1 text-xs text-slate-500">{{ entity.location or "Unknown location" }}</div>
+                    </td>
+                    <td class="p-4 text-slate-700">{{ entity.source or "N/A" }}</td>
+                    <td class="p-4 text-slate-700">{{ entity.source_query or entity.discovered_via or "N/A" }}</td>
+                    <td class="p-4 text-slate-700">{{ entity.source_region or "N/A" }}</td>
+                    <td class="p-4">
+                        {% if entity.source_confidence is not none %}
+                            <span class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
+                                {{ "%.2f"|format(entity.source_confidence) }}
+                            </span>
+                        {% else %}
+                            <span class="text-slate-500">N/A</span>
+                        {% endif %}
+                    </td>
+                    <td class="p-4">
+                        <span class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
+                            {{ entity.status }}
+                        </span>
+                    </td>
+                    <td class="p-4">
+                        <a href="/ui/entity/{{ entity.entity_id }}" class="font-medium text-blue-600 hover:underline">
+                            View
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="px-6 py-8 text-sm text-slate-500">No discovery entities are available yet.</div>
+    {% endif %}
+</div>
+{% endblock %}
