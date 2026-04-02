@@ -250,3 +250,98 @@ def test_entity_detail_shows_reply_triage_section(tmp_path, monkeypatch):
     assert "Reply Triage" in response.text
     assert "unsubscribe" in response.text
     assert "unsubscribe_recorded: yes" in response.text
+
+
+def test_entity_detail_shows_learning_outcome_section(tmp_path, monkeypatch):
+    client = _client_with_temp_ledger(tmp_path, monkeypatch)
+    _seed_candidate()
+    ledger.append(
+        {
+            "event_id": "entity-1-learning-outcome",
+            "event_type": EventType.OUTCOME_RECORDED.value,
+            "correlation_id": "c1",
+            "entity_id": "entity-1",
+            "payload": {
+                "outcome_version": "learning_v1",
+                "outcome_category": "reply_interested",
+                "source": "mock_directory",
+                "segment": "industrial_distributor",
+                "template_version": "v1",
+                "reply_classification": "interested",
+                "basis": {
+                    "sent_at": "2026-04-02T09:00:00+00:00",
+                    "last_reply_received_at": "2026-04-02T09:10:00+00:00",
+                },
+            },
+        }
+    )
+    ledger.append(
+        {
+            "event_id": "entity-1-learning-feedback",
+            "event_type": EventType.SCORING_FEEDBACK_GENERATED.value,
+            "correlation_id": "c1",
+            "entity_id": "entity-1",
+            "payload": {
+                "outcome_version": "learning_v1",
+                "outcome_category": "reply_interested",
+                "source": "mock_directory",
+                "segment": "industrial_distributor",
+                "template_version": "v1",
+                "reply_classification": "interested",
+                "source_quality": "strong",
+                "template_effectiveness": "positive",
+                "reply_signal_strength": "high",
+                "counts": {"observations": 1, "positive": 1, "negative": 0},
+            },
+        }
+    )
+    ledger.append(
+        {
+            "event_id": "entity-1-source-performance",
+            "event_type": EventType.SOURCE_PERFORMANCE_UPDATED.value,
+            "correlation_id": "c1",
+            "entity_id": "entity-1",
+            "payload": {
+                "outcome_version": "learning_v1",
+                "outcome_category": "reply_interested",
+                "source": "mock_directory",
+                "segment": "industrial_distributor",
+                "template_version": "v1",
+                "reply_classification": "interested",
+                "source_quality": "strong",
+                "template_effectiveness": "positive",
+                "reply_signal_strength": "high",
+                "counts": {"observations": 1, "positive": 1, "negative": 0},
+                "performance_note": "mock_directory / industrial_distributor: strong (reply_interested)",
+            },
+        }
+    )
+    ledger.append(
+        {
+            "event_id": "entity-1-template-performance",
+            "event_type": EventType.TEMPLATE_PERFORMANCE_UPDATED.value,
+            "correlation_id": "c1",
+            "entity_id": "entity-1",
+            "payload": {
+                "outcome_version": "learning_v1",
+                "outcome_category": "reply_interested",
+                "source": "mock_directory",
+                "segment": "industrial_distributor",
+                "template_version": "v1",
+                "reply_classification": "interested",
+                "source_quality": "strong",
+                "template_effectiveness": "positive",
+                "reply_signal_strength": "high",
+                "counts": {"observations": 1, "positive": 1, "negative": 0},
+                "performance_note": "v1: positive (reply_interested)",
+            },
+        }
+    )
+
+    response = client.get("/ui/entity/entity-1")
+
+    assert response.status_code == 200
+    assert "Learning / Outcome" in response.text
+    assert "reply_interested" in response.text
+    assert "strong" in response.text
+    assert "positive" in response.text

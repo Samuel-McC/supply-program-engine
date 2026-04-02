@@ -342,6 +342,52 @@
         </div>
 
         <div class="bg-white rounded-xl shadow-sm border p-6">
+            <h3 class="text-lg font-semibold text-slate-900 mb-4">Learning / Outcome</h3>
+
+            <div class="grid grid-cols-1 gap-4">
+                <div class="rounded-lg border bg-slate-50 p-4">
+                    <div class="text-xs uppercase tracking-wide text-slate-500">Latest Outcome</div>
+                    <div class="mt-1 font-medium text-slate-900">{{ entity.latest_outcome or "N/A" }}</div>
+                </div>
+
+                <div class="rounded-lg border bg-slate-50 p-4">
+                    <div class="text-xs uppercase tracking-wide text-slate-500">Outcome Version</div>
+                    <div class="mt-1 text-slate-900">{{ entity.learning_outcome_version or "N/A" }}</div>
+                </div>
+
+                <div class="rounded-lg border bg-slate-50 p-4">
+                    <div class="text-xs uppercase tracking-wide text-slate-500">Reply Signal Strength</div>
+                    <div class="mt-1 text-slate-900">{{ entity.learning_reply_signal_strength or "N/A" }}</div>
+                </div>
+
+                <div class="rounded-lg border bg-slate-50 p-4">
+                    <div class="text-xs uppercase tracking-wide text-slate-500">Source Quality</div>
+                    <div class="mt-1 text-slate-900">{{ entity.learning_source_quality or "N/A" }}</div>
+                </div>
+
+                <div class="rounded-lg border bg-slate-50 p-4">
+                    <div class="text-xs uppercase tracking-wide text-slate-500">Template Effectiveness</div>
+                    <div class="mt-1 text-slate-900">{{ entity.learning_template_effectiveness or "N/A" }}</div>
+                </div>
+
+                <div class="rounded-lg border bg-slate-50 p-4">
+                    <div class="text-xs uppercase tracking-wide text-slate-500">Last Updated</div>
+                    <div class="mt-1 text-slate-900">{{ entity.learning_last_updated_at or "N/A" }}</div>
+                </div>
+
+                <div class="rounded-lg border bg-slate-50 p-4">
+                    <div class="text-xs uppercase tracking-wide text-slate-500">Source Performance Note</div>
+                    <div class="mt-1 text-sm text-slate-900">{{ entity.learning_source_performance_note or "N/A" }}</div>
+                </div>
+
+                <div class="rounded-lg border bg-slate-50 p-4">
+                    <div class="text-xs uppercase tracking-wide text-slate-500">Template Performance Note</div>
+                    <div class="mt-1 text-sm text-slate-900">{{ entity.learning_template_performance_note or "N/A" }}</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border p-6">
             <h3 class="text-lg font-semibold text-slate-900 mb-4">Operator Actions</h3>
 
             {% if entity.draft_id and entity.status in ["draft_created", "rejected"] %}

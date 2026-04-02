@@ -27,6 +27,10 @@ class EventType(str, Enum):
     LEAD_REJECTED = "lead_rejected"
     UNSUBSCRIBE_RECORDED = "unsubscribe_recorded"
     REPLY_TRIAGE_FAILED = "reply_triage_failed"
+    OUTCOME_RECORDED = "outcome_recorded"
+    SCORING_FEEDBACK_GENERATED = "scoring_feedback_generated"
+    SOURCE_PERFORMANCE_UPDATED = "source_performance_updated"
+    TEMPLATE_PERFORMANCE_UPDATED = "template_performance_updated"
 
 
 class Candidate(BaseModel):
@@ -163,6 +167,14 @@ class PipelineEntityView(BaseModel):
     reply_out_of_office: bool = False
     reply_triage_error_type: Optional[str] = None
     reply_triage_error_message: Optional[str] = None
+    latest_outcome: Optional[str] = None
+    learning_outcome_version: Optional[str] = None
+    learning_source_quality: Optional[str] = None
+    learning_template_effectiveness: Optional[str] = None
+    learning_reply_signal_strength: Optional[str] = None
+    learning_source_performance_note: Optional[str] = None
+    learning_template_performance_note: Optional[str] = None
+    learning_last_updated_at: Optional[str] = None
 
     enrichment_status: Optional[str] = None
     enrichment_source: Optional[str] = None

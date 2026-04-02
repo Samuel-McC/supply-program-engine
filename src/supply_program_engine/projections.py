@@ -192,6 +192,43 @@ def build_pipeline_state() -> Dict[str, PipelineEntityView]:
             view.reply_triage_error_type = payload.get("error_type", view.reply_triage_error_type)
             view.reply_triage_error_message = payload.get("error_message", view.reply_triage_error_message)
 
+        elif et == EventType.OUTCOME_RECORDED.value:
+            view.latest_outcome = payload.get("outcome_category", view.latest_outcome)
+            view.learning_outcome_version = payload.get("outcome_version", view.learning_outcome_version)
+            view.learning_last_updated_at = ts or view.learning_last_updated_at
+
+        elif et == EventType.SCORING_FEEDBACK_GENERATED.value:
+            view.learning_outcome_version = payload.get("outcome_version", view.learning_outcome_version)
+            view.learning_source_quality = payload.get("source_quality", view.learning_source_quality)
+            view.learning_template_effectiveness = payload.get(
+                "template_effectiveness",
+                view.learning_template_effectiveness,
+            )
+            view.learning_reply_signal_strength = payload.get(
+                "reply_signal_strength",
+                view.learning_reply_signal_strength,
+            )
+            view.learning_last_updated_at = ts or view.learning_last_updated_at
+
+        elif et == EventType.SOURCE_PERFORMANCE_UPDATED.value:
+            view.learning_source_quality = payload.get("source_quality", view.learning_source_quality)
+            view.learning_source_performance_note = payload.get(
+                "performance_note",
+                view.learning_source_performance_note,
+            )
+            view.learning_last_updated_at = ts or view.learning_last_updated_at
+
+        elif et == EventType.TEMPLATE_PERFORMANCE_UPDATED.value:
+            view.learning_template_effectiveness = payload.get(
+                "template_effectiveness",
+                view.learning_template_effectiveness,
+            )
+            view.learning_template_performance_note = payload.get(
+                "performance_note",
+                view.learning_template_performance_note,
+            )
+            view.learning_last_updated_at = ts or view.learning_last_updated_at
+
     return state
 
 

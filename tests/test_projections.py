@@ -260,3 +260,106 @@ def test_projection_tracks_reply_triage_state(tmp_path, monkeypatch):
     assert v.last_reply_received_at == "2026-04-01T12:10:00+00:00"
     assert v.last_reply_text_snippet == "Please unsubscribe me from future emails."
     assert v.unsubscribe_recorded is True
+
+
+def test_projection_tracks_learning_feedback_state(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "LEDGER_PATH", str(tmp_path / "ledger.jsonl"))
+    monkeypatch.setattr(settings, "LEDGER_BACKEND", "file")
+
+    ledger.append({
+        "event_id": "ing-1",
+        "event_type": EventType.CANDIDATE_INGESTED.value,
+        "correlation_id": "c1",
+        "entity_id": "e1",
+        "payload": {
+            "company_name": "Globex Lumber Distributor",
+            "website": "https://globex.com",
+            "location": "CA",
+            "source": "manual",
+            "discovered_via": "industrial lumber distributor",
+        },
+    })
+    ledger.append({
+        "event_id": "learning-outcome-1",
+        "event_type": EventType.OUTCOME_RECORDED.value,
+        "correlation_id": "c1",
+        "entity_id": "e1",
+        "payload": {
+            "outcome_version": "learning_v1",
+            "outcome_category": "reply_interested",
+            "source": "manual",
+            "segment": "industrial_distributor",
+            "template_version": "v1",
+            "reply_classification": "interested",
+            "basis": {
+                "sent_at": "2026-04-02T09:00:00+00:00",
+                "last_reply_received_at": "2026-04-02T09:10:00+00:00",
+            },
+        },
+    })
+    ledger.append({
+        "event_id": "learning-feedback-1",
+        "event_type": EventType.SCORING_FEEDBACK_GENERATED.value,
+        "correlation_id": "c1",
+        "entity_id": "e1",
+        "payload": {
+            "outcome_version": "learning_v1",
+            "outcome_category": "reply_interested",
+            "source": "manual",
+            "segment": "industrial_distributor",
+            "template_version": "v1",
+            "reply_classification": "interested",
+            "source_quality": "strong",
+            "template_effectiveness": "positive",
+            "reply_signal_strength": "high",
+            "counts": {"observations": 1, "positive": 1, "negative": 0},
+        },
+    })
+    ledger.append({
+        "event_id": "learning-source-1",
+        "event_type": EventType.SOURCE_PERFORMANCE_UPDATED.value,
+        "correlation_id": "c1",
+        "entity_id": "e1",
+        "payload": {
+            "outcome_version": "learning_v1",
+            "outcome_category": "reply_interested",
+            "source": "manual",
+            "segment": "industrial_distributor",
+            "template_version": "v1",
+            "reply_classification": "interested",
+            "source_quality": "strong",
+            "template_effectiveness": "positive",
+            "reply_signal_strength": "high",
+            "counts": {"observations": 1, "positive": 1, "negative": 0},
+            "performance_note": "manual / industrial_distributor: strong (reply_interested)",
+        },
+    })
+    ledger.append({
+        "event_id": "learning-template-1",
+        "event_type": EventType.TEMPLATE_PERFORMANCE_UPDATED.value,
+        "correlation_id": "c1",
+        "entity_id": "e1",
+        "payload": {
+            "outcome_version": "learning_v1",
+            "outcome_category": "reply_interested",
+            "source": "manual",
+            "segment": "industrial_distributor",
+            "template_version": "v1",
+            "reply_classification": "interested",
+            "source_quality": "strong",
+            "template_effectiveness": "positive",
+            "reply_signal_strength": "high",
+            "counts": {"observations": 1, "positive": 1, "negative": 0},
+            "performance_note": "v1: positive (reply_interested)",
+        },
+    })
+
+    state = build_pipeline_state()
+    v = state["e1"]
+    assert v.latest_outcome == "reply_interested"
+    assert v.learning_outcome_version == "learning_v1"
+    assert v.learning_source_quality == "strong"
+    assert v.learning_template_effectiveness == "positive"
+    assert v.learning_reply_signal_strength == "high"
+    assert v.learning_source_performance_note == "manual / industrial_distributor: strong (reply_interested)"
+    assert v.learning_template_performance_note == "v1: positive (reply_interested)"

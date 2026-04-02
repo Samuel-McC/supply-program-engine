@@ -150,6 +150,36 @@ Reply ingestion can link by `entity_id`, `draft_id`, or provider `message_id`, a
 
 ---
 
+## Learning Feedback
+
+The learning stage is a deterministic analytics layer built on top of existing workflow outcomes.
+
+The stage emits:
+
+- `outcome_recorded`
+- `scoring_feedback_generated`
+- `source_performance_updated`
+- `template_performance_updated`
+
+Phase 21 is intentionally bounded:
+
+- no rule rewriting
+- no model inference
+- no self-modifying behavior
+- structured feedback labels only
+
+The runner derives outcome categories from existing send and reply state such as:
+
+- `sent_no_reply`
+- `reply_interested`
+- `reply_rejected`
+- `unsubscribe`
+- `out_of_office`
+
+It then emits compact source, segment, and template feedback signals such as source quality, template effectiveness, and reply signal strength while preserving replayability and idempotency.
+
+---
+
 ## Operator Console
 
 The console is implemented with:
