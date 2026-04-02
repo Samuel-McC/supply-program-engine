@@ -180,6 +180,29 @@ It then emits compact source, segment, and template feedback signals such as sou
 
 ---
 
+## Queue and Worker Runtime
+
+Phase 22 adds a bounded queue-backed worker runtime for background execution.
+
+The design is intentionally simple:
+
+- queue abstraction first
+- Redis backend for asynchronous task transport
+- in-memory fallback for local development and tests
+- existing phase runners remain the business-logic entrypoints
+
+Initial queued task types include:
+
+- `enrichment_run`
+- `sender_run`
+- `learning_run`
+
+Workers dequeue a task, dispatch it to the corresponding deterministic `run_once` phase runner, and rely on the existing ledger/idempotency protections to avoid duplicate side effects.
+
+Manual `run-once` API endpoints remain available for local operation, replay, and debugging, so the queue runtime coexists with the synchronous paths rather than replacing them.
+
+---
+
 ## Operator Console
 
 The console is implemented with:

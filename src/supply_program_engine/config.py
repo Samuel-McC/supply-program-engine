@@ -38,6 +38,11 @@ class Settings(BaseModel):
     SEND_POLICY_RISK_THRESHOLD: int = int(os.getenv("SEND_POLICY_RISK_THRESHOLD", "3"))
     SUPPRESSED_ENTITIES: str = os.getenv("SUPPRESSED_ENTITIES", "")
     SUPPRESSED_DOMAINS: str = os.getenv("SUPPRESSED_DOMAINS", "")
+    QUEUE_BACKEND: str = os.getenv("QUEUE_BACKEND", "memory")
+    REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    QUEUE_NAME: str = os.getenv("QUEUE_NAME", "spe:tasks")
+    WORKER_ENABLED: bool = os.getenv("WORKER_ENABLED", "false").lower() == "true"
+    WORKER_POLL_TIMEOUT_SECONDS: int = int(os.getenv("WORKER_POLL_TIMEOUT_SECONDS", "5"))
 
 
 

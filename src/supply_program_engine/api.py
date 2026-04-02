@@ -28,7 +28,9 @@ from supply_program_engine.orchestrator import run_once as phase3_run_once
 from supply_program_engine.outbound.orchestrator import run_once as outbound_run_once
 from supply_program_engine.outbound.sender import run_once as sender_run_once
 from supply_program_engine.projections import build_pipeline_state, entity_timeline, rank_pipeline
+from supply_program_engine.queue import QueueUnavailableError, TaskMessage, get_queue
 from supply_program_engine.reply_triage import process_reply
+from supply_program_engine.workers.runner import run_once as worker_run_once
 
 log = get_logger("supply_program_engine")
 templates = Jinja2Templates(directory="src/supply_program_engine/templates")
@@ -251,6 +253,41 @@ def create_app() -> FastAPI:
         cid = getattr(request.state, "correlation_id", generate_correlation_id())
         result = learning_run_once(limit=limit)
         log.info("learning_run_once", extra={"correlation_id": cid, **result})
+        return {"correlation_id": cid, **result}
+
+    @app.post("/queue/enqueue")
+    async def queue_enqueue(
+        task: TaskMessage,
+        request: Request,
+        x_admin_api_key: Optional[str] = Header(default=None),
+    ):
+        _require_admin_api_key(x_admin_api_key)
+        cid = getattr(request.state, "correlation_id", generate_correlation_id())
+        queued_task = task.model_copy(update={"correlation_id": task.correlation_id or cid})
+
+        try:
+            result = get_queue().enqueue(queued_task)
+        except QueueUnavailableError as exc:
+            raise HTTPException(status_code=503, detail=f"queue_unavailable:{exc}")
+
+        log.info("task_enqueued", extra={"correlation_id": cid, **result})
+        return {"correlation_id": cid, **result}
+
+    @app.post("/worker/run-once")
+    async def worker_run_once_endpoint(
+        request: Request,
+        timeout_seconds: int = 0,
+        x_admin_api_key: Optional[str] = Header(default=None),
+    ):
+        _require_admin_api_key(x_admin_api_key)
+        cid = getattr(request.state, "correlation_id", generate_correlation_id())
+
+        try:
+            result = worker_run_once(timeout_seconds=timeout_seconds)
+        except QueueUnavailableError as exc:
+            raise HTTPException(status_code=503, detail=f"queue_unavailable:{exc}")
+
+        log.info("worker_run_once", extra={"correlation_id": cid, **result})
         return {"correlation_id": cid, **result}
 
     @app.post("/outbound/decision")
