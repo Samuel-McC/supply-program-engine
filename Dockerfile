@@ -15,10 +15,14 @@ COPY alembic.ini /app/alembic.ini
 COPY pytest.ini /app/pytest.ini
 COPY pyproject.toml /app/pyproject.toml
 COPY README.md /app/README.md
+COPY scripts /app/scripts
+
+RUN chmod +x /app/scripts/docker-entrypoint.sh
 
 RUN useradd -m appuser && chown -R appuser:appuser /app
 USER appuser
 
 EXPOSE 8000
 
+ENTRYPOINT ["/app/scripts/docker-entrypoint.sh"]
 CMD ["python", "-m", "uvicorn", "supply_program_engine.api:app", "--host", "0.0.0.0", "--port", "8000", "--app-dir", "/app/src"]

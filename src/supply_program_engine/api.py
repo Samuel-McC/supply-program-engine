@@ -5,9 +5,7 @@ import hashlib
 import hmac
 import json
 import time
-from tracemalloc import start
 from typing import Optional
-from urllib import request, response
 
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -20,6 +18,7 @@ from supply_program_engine.models import ApprovalDecision
 from supply_program_engine import ledger
 from supply_program_engine.config import settings
 from supply_program_engine.enrichment import run_once as enrichment_run_once
+from supply_program_engine.identity import stable_entity_id
 from supply_program_engine.learning import run_once as learning_run_once
 from supply_program_engine.logging import generate_correlation_id, get_logger
 from supply_program_engine.metrics import record_request, snapshot
@@ -37,22 +36,8 @@ log = get_logger("supply_program_engine")
 templates = Jinja2Templates(directory="src/supply_program_engine/templates")
 
 
-def _stable_entity_id(candidate: Candidate) -> str:
-    """
-    Stable identity preference:
-    1. website
-    2. external_id + source
-    3. company_name + location
-    """
-    if candidate.website and candidate.website.strip():
-        basis = candidate.website.strip().lower()
-    elif candidate.external_id and candidate.source:
-        basis = f"{candidate.source.strip().lower()}|{candidate.external_id.strip().lower()}"
-    else:
-        basis = f"{candidate.company_name.strip().lower()}|{candidate.location.strip().lower()}"
-
-    return hashlib.sha256(basis.encode("utf-8")).hexdigest()
-
+def _template_response(request: Request, name: str, **context: object) -> HTMLResponse:
+    return templates.TemplateResponse(request, name, {"request": request, **context})
 
 
 def _compute_signature(raw_body: bytes) -> str:
@@ -164,7 +149,7 @@ def create_app() -> FastAPI:
                 log.info("candidate_ingest_duplicate", extra={"correlation_id": cid, "event_id": event_id})
                 return {"status": "duplicate", "event_id": event_id, "correlation_id": cid}
 
-            entity_id = _stable_entity_id(candidate)
+            entity_id = stable_entity_id(candidate)
 
             stored = ledger.append(
                 {
@@ -431,13 +416,7 @@ def create_app() -> FastAPI:
             "sent": len([x for x in ranked if x.status == "sent"]),
         }
 
-        return templates.TemplateResponse(
-            "candidates.html",
-            {
-                "request": request,
-                "summary": summary,
-            },
-    )
+        return _template_response(request, "candidates.html", summary=summary)
 
 
     @app.get("/ui/candidates/table", response_class=HTMLResponse)
@@ -445,13 +424,7 @@ def create_app() -> FastAPI:
         state = build_pipeline_state()
         ranked = rank_pipeline(list(state.values()))
 
-        return templates.TemplateResponse(
-            "candidates_table.html",
-            {   
-                "request": request,
-                "candidates": ranked,
-            },
-    )
+        return _template_response(request, "candidates_table.html", candidates=ranked)
 
     @app.get("/ui/discovery", response_class=HTMLResponse)
     async def ui_discovery(request: Request):
@@ -473,30 +446,21 @@ def create_app() -> FastAPI:
             "manual_review": len([view for view in discovered if view.requires_manual_review]),
         }
 
-        return templates.TemplateResponse(
+        return _template_response(
+            request,
             "discovery.html",
-            {
-                "request": request,
-                "summary": summary,
-                "entities": discovered,
-                "source_counts": source_counts.most_common(),
-                "region_counts": region_counts.most_common(),
-                "query_counts": query_counts.most_common(5),
-            },
+            summary=summary,
+            entities=discovered,
+            source_counts=source_counts.most_common(),
+            region_counts=region_counts.most_common(),
+            query_counts=query_counts.most_common(5),
         )
 
 
     @app.get("/ui/metrics", response_class=HTMLResponse)
     async def ui_metrics(request: Request):
         events = list(ledger.read())
-        return templates.TemplateResponse(
-            "metrics.html",
-            {
-                "request": request,
-                "total_events": len(events),
-                "metrics": snapshot(),
-            },
-        )
+        return _template_response(request, "metrics.html", total_events=len(events), metrics=snapshot())
 
     @app.get("/ui/entity/{entity_id}", response_class=HTMLResponse)
     async def ui_entity_detail(request: Request, entity_id: str):
@@ -508,14 +472,7 @@ def create_app() -> FastAPI:
 
         events = entity_timeline(entity_id)
 
-        return templates.TemplateResponse(
-            "entity_detail.html",
-            {
-                "request": request,
-                "entity": entity,
-                "events": events,
-            },
-        )
+        return _template_response(request, "entity_detail.html", entity=entity, events=events)
 
     @app.post("/ui/entity/{entity_id}/approve")
     async def ui_entity_approve(

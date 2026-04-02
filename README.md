@@ -154,29 +154,65 @@ Background work can be enqueued and executed through a worker runtime while keep
 git clone https://github.com/Samuel-McC/supply-program-engine.git
 cd supply-program-engine 
 ```
-### 2. Create a virtual environment
-```bash 
-uv venv
-source .venv/bin/activate
-```
-### 3. Install dependencies
-```bash 
-uv pip install -r requirements.txt
-```
-### 4. Create local environment config
+### 2. Create local environment config
 ```bash 
 cp .env.example .env
 ```
-### 5. Run the app
+### 3. Install dependencies
 ```bash 
-PYTHONPATH=src python -m uvicorn supply_program_engine.api:app --app-dir src --host 127.0.0.1 --port 8000 --reload
+make install
 ```
+### 4. Run the app
+```bash 
+make run
+```
+### 5. Seed the demo walkthrough
+```bash 
+make demo-seed
+```
+The demo seed is deterministic, uses the mock outbound provider in dry-run mode, and is safe to rerun for the same fresh environment.
+
 ### 6. Run tests
 ```bash 
-python -m pytest -q
+make test
 ```
 
-## Example workflow
+If you are using the DB ledger locally, run migrations before starting the app:
+
+```bash 
+make db-upgrade
+```
+
+## Docker demo quickstart
+
+```bash
+make docker-up
+make docker-demo-seed
+```
+
+When `LEDGER_BACKEND=db`, the app container now runs Alembic migrations automatically on startup before Uvicorn begins serving requests.
+
+## Demo flow
+
+After seeding, open:
+
+- `http://127.0.0.1:8000/ui/candidates`
+- `http://127.0.0.1:8000/ui/discovery`
+
+The seed walkthrough creates three realistic entities and runs the existing workflow through:
+
+- candidate ingest
+- enrichment
+- qualification
+- draft generation
+- approval
+- send / policy gate
+- reply triage
+- learning feedback
+
+Two entities progress through send and reply outcomes, and one remains blocked at the policy gate for operator review.
+
+## Example API workflow
 
 ### Ingest a candidate
 ```bash 
@@ -201,15 +237,6 @@ curl -X POST "http://127.0.0.1:8000/orchestrator/run-once?limit=50"
 ### Generate drafts
 ```bash 
 curl -X POST "http://127.0.0.1:8000/outbound/run-once?limit=50"
-```
-### Ingest a reply
-```bash 
-curl -X POST "http://127.0.0.1:8000/reply-triage/ingest" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "entity_id": "<entity_id>",
-    "reply_text": "Hi, yes, please send pricing and details."
-  }'
 ```
 ### Run learning
 ```bash
