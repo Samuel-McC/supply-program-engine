@@ -43,6 +43,9 @@ class Settings(BaseModel):
     QUEUE_NAME: str = os.getenv("QUEUE_NAME", "spe:tasks")
     WORKER_ENABLED: bool = os.getenv("WORKER_ENABLED", "false").lower() == "true"
     WORKER_POLL_TIMEOUT_SECONDS: int = int(os.getenv("WORKER_POLL_TIMEOUT_SECONDS", "5"))
+    OTEL_ENABLED: bool = os.getenv("OTEL_ENABLED", "false").lower() == "true"
+    OTEL_SERVICE_NAME: str = os.getenv("OTEL_SERVICE_NAME", "supply-program-engine")
+    OTEL_EXPORTER_TYPE: str = os.getenv("OTEL_EXPORTER_TYPE", "console")
 
 
 

@@ -5,6 +5,7 @@ from supply_program_engine.compliance import evaluate_compliance
 from supply_program_engine.enrichment import latest_completed_enrichment
 from supply_program_engine.logging import generate_correlation_id, get_logger
 from supply_program_engine.models import Candidate, EventType, Qualification
+from supply_program_engine.observability import trace_span
 from supply_program_engine.qualification import qualify
 
 log = get_logger("supply_program_engine")
@@ -64,62 +65,70 @@ def run_once(limit: int = 50) -> dict:
     emitted = 0
     skipped_duplicates = 0
 
-    for rec in ledger.read():
-        if processed >= limit:
-            break
+    with trace_span("runner.qualification.batch", task_type="qualification_run", extra={"limit": limit}):
+        for rec in ledger.read():
+            if processed >= limit:
+                break
 
-        if rec.get("event_type") != EventType.CANDIDATE_INGESTED.value:
-            continue
+            if rec.get("event_type") != EventType.CANDIDATE_INGESTED.value:
+                continue
 
-        candidate_payload = rec.get("payload") or {}
-        entity_id = rec.get("entity_id") or "unknown"
-        cid = rec.get("correlation_id") or generate_correlation_id()
-        enrichment = latest_completed_enrichment(entity_id)
+            candidate_payload = rec.get("payload") or {}
+            entity_id = rec.get("entity_id") or "unknown"
+            cid = rec.get("correlation_id") or generate_correlation_id()
+            enrichment = latest_completed_enrichment(entity_id)
 
-        q_event_id = _qualification_event_id(candidate_payload, enrichment.get("event_id") if enrichment else None)
-        processed += 1
+            q_event_id = _qualification_event_id(candidate_payload, enrichment.get("event_id") if enrichment else None)
+            processed += 1
 
-        if ledger.exists(q_event_id):
-            skipped_duplicates += 1
-            continue
+            with trace_span(
+                "runner.qualification.entity",
+                correlation_id=cid,
+                entity_id=entity_id,
+                event_type=EventType.QUALIFICATION_COMPUTED.value,
+                extra={"enrichment_event_id": enrichment.get("event_id") if enrichment else None},
+            ):
+                if ledger.exists(q_event_id):
+                    skipped_duplicates += 1
+                    continue
 
-        candidate = Candidate(**candidate_payload)
-        base_q = _apply_enrichment_to_qualification(qualify(candidate), (enrichment or {}).get("payload"))
-        compliance = evaluate_compliance(candidate, base_q)
+                candidate = Candidate(**candidate_payload)
+                base_q = _apply_enrichment_to_qualification(qualify(candidate), (enrichment or {}).get("payload"))
+                compliance = evaluate_compliance(candidate, base_q)
 
-        q = Qualification(
-            segment=base_q.segment,
-            priority_score=base_q.priority_score,
-            estimated_containers_per_month=base_q.estimated_containers_per_month,
-            decision_maker_type=base_q.decision_maker_type,
-            notes=base_q.notes,
-            evidence=base_q.evidence,
-            scoring_version=base_q.scoring_version,
-            risk_score=compliance["risk_score"],
-            requires_manual_review=compliance["requires_manual_review"],
-            policy_version=compliance["policy_version"],
-            compliance_findings=compliance["findings"],
-        )
+                q = Qualification(
+                    segment=base_q.segment,
+                    priority_score=base_q.priority_score,
+                    estimated_containers_per_month=base_q.estimated_containers_per_month,
+                    decision_maker_type=base_q.decision_maker_type,
+                    notes=base_q.notes,
+                    evidence=base_q.evidence,
+                    scoring_version=base_q.scoring_version,
+                    risk_score=compliance["risk_score"],
+                    requires_manual_review=compliance["requires_manual_review"],
+                    policy_version=compliance["policy_version"],
+                    compliance_findings=compliance["findings"],
+                )
 
-        ledger.append(
-            {
-                "event_id": q_event_id,
-                "event_type": EventType.QUALIFICATION_COMPUTED.value,
-                "correlation_id": cid,
-                "entity_id": entity_id,
-                "payload": q.model_dump(),
-            }
-        )
+                ledger.append(
+                    {
+                        "event_id": q_event_id,
+                        "event_type": EventType.QUALIFICATION_COMPUTED.value,
+                        "correlation_id": cid,
+                        "entity_id": entity_id,
+                        "payload": q.model_dump(),
+                    }
+                )
 
-        emitted += 1
-        log.info(
-            "qualification_emitted",
-            extra={
-                "correlation_id": cid,
-                "entity_id": entity_id,
-                "event_id": q_event_id,
-                "enrichment_event_id": enrichment.get("event_id") if enrichment else None,
-            },
-        )
+                emitted += 1
+                log.info(
+                    "qualification_emitted",
+                    extra={
+                        "correlation_id": cid,
+                        "entity_id": entity_id,
+                        "event_id": q_event_id,
+                        "enrichment_event_id": enrichment.get("event_id") if enrichment else None,
+                    },
+                )
 
     return {"processed": processed, "emitted": emitted, "skipped_duplicates": skipped_duplicates}

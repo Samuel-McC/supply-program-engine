@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from supply_program_engine.config import settings
+from supply_program_engine.observability import trace_span
 from supply_program_engine.queue.base import QueueBackend, QueueUnavailableError, TaskMessage
 from supply_program_engine.queue.redis_queue import RedisQueue
 from supply_program_engine.queue.sync_queue import MEMORY_QUEUE
@@ -28,4 +29,14 @@ def reset_queue_backend() -> None:
     MEMORY_QUEUE.clear()
 
 
-__all__ = ["TaskMessage", "QueueUnavailableError", "get_queue", "reset_queue_backend"]
+def enqueue_task(task: TaskMessage) -> dict[str, object]:
+    with trace_span(
+        "queue.enqueue",
+        correlation_id=task.correlation_id,
+        entity_id=task.entity_id,
+        task_type=task.task_type,
+    ):
+        return get_queue().enqueue(task)
+
+
+__all__ = ["TaskMessage", "QueueUnavailableError", "enqueue_task", "get_queue", "reset_queue_backend"]

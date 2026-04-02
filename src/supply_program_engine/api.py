@@ -24,11 +24,12 @@ from supply_program_engine.learning import run_once as learning_run_once
 from supply_program_engine.logging import generate_correlation_id, get_logger
 from supply_program_engine.metrics import record_request, snapshot
 from supply_program_engine.models import ApprovalDecision, Candidate, EventType, InboundReply
+from supply_program_engine.observability import initialize_tracing, trace_span
 from supply_program_engine.orchestrator import run_once as phase3_run_once
 from supply_program_engine.outbound.orchestrator import run_once as outbound_run_once
 from supply_program_engine.outbound.sender import run_once as sender_run_once
 from supply_program_engine.projections import build_pipeline_state, entity_timeline, rank_pipeline
-from supply_program_engine.queue import QueueUnavailableError, TaskMessage, get_queue
+from supply_program_engine.queue import QueueUnavailableError, TaskMessage, enqueue_task
 from supply_program_engine.reply_triage import process_reply
 from supply_program_engine.workers.runner import run_once as worker_run_once
 
@@ -75,6 +76,7 @@ def _require_admin_api_key(x_admin_api_key: Optional[str]) -> None:
 
 
 def create_app() -> FastAPI:
+    initialize_tracing()
     app = FastAPI(title=settings.APP_NAME)
 
     @app.middleware("http")
@@ -132,51 +134,56 @@ def create_app() -> FastAPI:
         x_signature: Optional[str] = Header(default=None),
     ):
         cid = getattr(request.state, "correlation_id", generate_correlation_id())
-        raw = await request.body()
+        with trace_span(
+            "api.candidate_ingress",
+            correlation_id=cid,
+            event_type=EventType.CANDIDATE_INGESTED.value,
+        ):
+            raw = await request.body()
 
-        if settings.ENV != "dev":
-            if not x_signature:
-                raise HTTPException(status_code=401, detail="Missing X-Signature")
-            expected = _compute_signature(raw)
-            if not hmac.compare_digest(x_signature, expected):
-                raise HTTPException(status_code=401, detail="Invalid X-Signature")
+            if settings.ENV != "dev":
+                if not x_signature:
+                    raise HTTPException(status_code=401, detail="Missing X-Signature")
+                expected = _compute_signature(raw)
+                if not hmac.compare_digest(x_signature, expected):
+                    raise HTTPException(status_code=401, detail="Invalid X-Signature")
 
-        try:
-            payload_obj = json.loads(raw.decode("utf-8"))
-        except Exception:
-            raise HTTPException(status_code=400, detail="Invalid JSON")
+            try:
+                payload_obj = json.loads(raw.decode("utf-8"))
+            except Exception:
+                raise HTTPException(status_code=400, detail="Invalid JSON")
 
-        candidate = Candidate(**payload_obj)
-        event_payload = candidate.model_dump()
+            candidate = Candidate(**payload_obj)
+            event_payload = candidate.model_dump()
 
-        event_id = ledger.generate_event_id(
-            {"event_type": EventType.CANDIDATE_INGESTED.value, "candidate": event_payload}
-        )
+            event_id = ledger.generate_event_id(
+                {"event_type": EventType.CANDIDATE_INGESTED.value, "candidate": event_payload}
+            )
 
-        if ledger.exists(event_id):
-            log.info("candidate_ingest_duplicate", extra={"correlation_id": cid, "event_id": event_id})
-            return {"status": "duplicate", "event_id": event_id, "correlation_id": cid}
+            if ledger.exists(event_id):
+                log.info("candidate_ingest_duplicate", extra={"correlation_id": cid, "event_id": event_id})
+                return {"status": "duplicate", "event_id": event_id, "correlation_id": cid}
 
-        entity_id = _stable_entity_id(candidate)
+            entity_id = _stable_entity_id(candidate)
 
-        stored = ledger.append(
-            {
-                "event_id": event_id,
-                "event_type": EventType.CANDIDATE_INGESTED.value,
+            stored = ledger.append(
+                {
+                    "event_id": event_id,
+                    "event_type": EventType.CANDIDATE_INGESTED.value,
+                    "correlation_id": cid,
+                    "entity_id": entity_id,
+                    "payload": event_payload,
+                }
+            )
+
+            log.info("candidate_ingested", extra={"correlation_id": cid, "event_id": event_id, "entity_id": entity_id})
+
+            return {
+                "status": "ingested",
+                "event_id": stored["event_id"],
+                "entity_id": stored["entity_id"],
                 "correlation_id": cid,
-                "entity_id": entity_id,
-                "payload": event_payload,
             }
-        )
-
-        log.info("candidate_ingested", extra={"correlation_id": cid, "event_id": event_id, "entity_id": entity_id})
-
-        return {
-            "status": "ingested",
-            "event_id": stored["event_id"],
-            "entity_id": stored["entity_id"],
-            "correlation_id": cid,
-        }
 
     @app.post("/orchestrator/run-once")
     async def orchestrator_run_once(
@@ -186,7 +193,8 @@ def create_app() -> FastAPI:
     ):
         _require_admin_api_key(x_admin_api_key)
         cid = getattr(request.state, "correlation_id", generate_correlation_id())
-        result = phase3_run_once(limit=limit)
+        with trace_span("api.orchestrator_run_once", correlation_id=cid, task_type="qualification_run", extra={"limit": limit}):
+            result = phase3_run_once(limit=limit)
         log.info("orchestrator_run_once", extra={"correlation_id": cid, **result})
         return {"correlation_id": cid, **result}
 
@@ -198,7 +206,8 @@ def create_app() -> FastAPI:
     ):
         _require_admin_api_key(x_admin_api_key)
         cid = getattr(request.state, "correlation_id", generate_correlation_id())
-        result = enrichment_run_once(limit=limit)
+        with trace_span("api.enrichment_run_once", correlation_id=cid, task_type="enrichment_run", extra={"limit": limit}):
+            result = enrichment_run_once(limit=limit)
         log.info("enrichment_run_once", extra={"correlation_id": cid, **result})
         return {"correlation_id": cid, **result}
 
@@ -210,7 +219,8 @@ def create_app() -> FastAPI:
     ):
         _require_admin_api_key(x_admin_api_key)
         cid = getattr(request.state, "correlation_id", generate_correlation_id())
-        result = outbound_run_once(limit=limit)
+        with trace_span("api.outbound_run_once", correlation_id=cid, task_type="outbound_draft_run", extra={"limit": limit}):
+            result = outbound_run_once(limit=limit)
         log.info("outbound_run_once", extra={"correlation_id": cid, **result})
         return {"correlation_id": cid, **result}
 
@@ -222,7 +232,8 @@ def create_app() -> FastAPI:
     ):
         _require_admin_api_key(x_admin_api_key)
         cid = getattr(request.state, "correlation_id", generate_correlation_id())
-        result = sender_run_once(limit=limit)
+        with trace_span("api.sender_run_once", correlation_id=cid, task_type="sender_run", extra={"limit": limit}):
+            result = sender_run_once(limit=limit)
         log.info("sender_run_once", extra={"correlation_id": cid, **result})
         return {"correlation_id": cid, **result}
 
@@ -235,10 +246,16 @@ def create_app() -> FastAPI:
         _require_admin_api_key(x_admin_api_key)
         cid = getattr(request.state, "correlation_id", generate_correlation_id())
 
-        try:
-            result = process_reply(reply, correlation_id=cid)
-        except ValueError as exc:
-            raise HTTPException(status_code=404, detail=str(exc))
+        with trace_span(
+            "api.reply_triage_ingest",
+            correlation_id=cid,
+            entity_id=reply.entity_id,
+            task_type="reply_triage",
+        ):
+            try:
+                result = process_reply(reply, correlation_id=cid)
+            except ValueError as exc:
+                raise HTTPException(status_code=404, detail=str(exc))
 
         log.info("reply_triage_ingest", extra={"correlation_id": cid, **result})
         return {"correlation_id": cid, **result}
@@ -251,7 +268,8 @@ def create_app() -> FastAPI:
     ):
         _require_admin_api_key(x_admin_api_key)
         cid = getattr(request.state, "correlation_id", generate_correlation_id())
-        result = learning_run_once(limit=limit)
+        with trace_span("api.learning_run_once", correlation_id=cid, task_type="learning_run", extra={"limit": limit}):
+            result = learning_run_once(limit=limit)
         log.info("learning_run_once", extra={"correlation_id": cid, **result})
         return {"correlation_id": cid, **result}
 
@@ -265,10 +283,16 @@ def create_app() -> FastAPI:
         cid = getattr(request.state, "correlation_id", generate_correlation_id())
         queued_task = task.model_copy(update={"correlation_id": task.correlation_id or cid})
 
-        try:
-            result = get_queue().enqueue(queued_task)
-        except QueueUnavailableError as exc:
-            raise HTTPException(status_code=503, detail=f"queue_unavailable:{exc}")
+        with trace_span(
+            "api.queue_enqueue",
+            correlation_id=queued_task.correlation_id,
+            entity_id=queued_task.entity_id,
+            task_type=queued_task.task_type,
+        ):
+            try:
+                result = enqueue_task(queued_task)
+            except QueueUnavailableError as exc:
+                raise HTTPException(status_code=503, detail=f"queue_unavailable:{exc}")
 
         log.info("task_enqueued", extra={"correlation_id": cid, **result})
         return {"correlation_id": cid, **result}
@@ -282,10 +306,11 @@ def create_app() -> FastAPI:
         _require_admin_api_key(x_admin_api_key)
         cid = getattr(request.state, "correlation_id", generate_correlation_id())
 
-        try:
-            result = worker_run_once(timeout_seconds=timeout_seconds)
-        except QueueUnavailableError as exc:
-            raise HTTPException(status_code=503, detail=f"queue_unavailable:{exc}")
+        with trace_span("api.worker_run_once", correlation_id=cid, task_type="worker_run", extra={"timeout_seconds": timeout_seconds}):
+            try:
+                result = worker_run_once(timeout_seconds=timeout_seconds)
+            except QueueUnavailableError as exc:
+                raise HTTPException(status_code=503, detail=f"queue_unavailable:{exc}")
 
         log.info("worker_run_once", extra={"correlation_id": cid, **result})
         return {"correlation_id": cid, **result}
@@ -306,69 +331,77 @@ def create_app() -> FastAPI:
         if not draft_event or draft_event.get("event_type") != EventType.OUTBOUND_DRAFT_CREATED.value:
             raise HTTPException(status_code=404, detail="Draft not found")
 
-        decision_event_type = (
-            EventType.OUTBOUND_APPROVED.value
-            if decision.decision == "approved"
-            else EventType.OUTBOUND_REJECTED.value
-        )
+        with trace_span(
+            "api.outbound_decision",
+            correlation_id=cid,
+            entity_id=draft_event.get("entity_id"),
+            event_type=decision.decision,
+            extra={"draft_id": decision.draft_id, "actor": decision.actor},
+        ):
 
-        decision_event_id = ledger.generate_event_id(
-            {
-                "event_type": decision_event_type,
-                "draft_id": decision.draft_id,
-                "actor": decision.actor,
-                "reason": decision.reason or "",
-            }
-        )
+            decision_event_type = (
+                EventType.OUTBOUND_APPROVED.value
+                if decision.decision == "approved"
+                else EventType.OUTBOUND_REJECTED.value
+            )
 
-        if ledger.exists(decision_event_id):
-            return {"status": "duplicate", "event_id": decision_event_id, "correlation_id": cid}
-
-        stored = ledger.append(
-            {
-                "event_id": decision_event_id,
-                "event_type": decision_event_type,
-                "correlation_id": cid,
-                "entity_id": draft_event.get("entity_id"),
-                "payload": decision.model_dump(),
-            }
-        )
-
-        if decision.decision == "approved":
-            outbox_event_id = ledger.generate_event_id(
+            decision_event_id = ledger.generate_event_id(
                 {
-                    "event_type": EventType.OUTBOX_READY.value,
+                    "event_type": decision_event_type,
                     "draft_id": decision.draft_id,
-                    "entity_id": draft_event.get("entity_id"),
+                    "actor": decision.actor,
+                    "reason": decision.reason or "",
                 }
             )
 
-            if not ledger.exists(outbox_event_id):
-                ledger.append(
+            if ledger.exists(decision_event_id):
+                return {"status": "duplicate", "event_id": decision_event_id, "correlation_id": cid}
+
+            stored = ledger.append(
+                {
+                    "event_id": decision_event_id,
+                    "event_type": decision_event_type,
+                    "correlation_id": cid,
+                    "entity_id": draft_event.get("entity_id"),
+                    "payload": decision.model_dump(),
+                }
+            )
+
+            if decision.decision == "approved":
+                outbox_event_id = ledger.generate_event_id(
                     {
-                        "event_id": outbox_event_id,
                         "event_type": EventType.OUTBOX_READY.value,
-                        "correlation_id": cid,
+                        "draft_id": decision.draft_id,
                         "entity_id": draft_event.get("entity_id"),
-                        "payload": {
-                            "draft_id": decision.draft_id,
-                            "channel": "email",
-                            "status": "ready",
-                        },
                     }
                 )
 
-        log.info(
-            "outbound_decision_recorded",
-            extra={
-                "correlation_id": cid,
-                "draft_id": decision.draft_id,
-                "decision": decision.decision,
-                "actor": decision.actor,
-            },
-        )
+                if not ledger.exists(outbox_event_id):
+                    ledger.append(
+                        {
+                            "event_id": outbox_event_id,
+                            "event_type": EventType.OUTBOX_READY.value,
+                            "correlation_id": cid,
+                            "entity_id": draft_event.get("entity_id"),
+                            "payload": {
+                                "draft_id": decision.draft_id,
+                                "channel": "email",
+                                "status": "ready",
+                            },
+                        }
+                    )
 
-        return {"status": "recorded", "event_id": stored["event_id"], "correlation_id": cid}
+            log.info(
+                "outbound_decision_recorded",
+                extra={
+                    "correlation_id": cid,
+                    "draft_id": decision.draft_id,
+                    "decision": decision.decision,
+                    "actor": decision.actor,
+                },
+            )
+
+            return {"status": "recorded", "event_id": stored["event_id"], "correlation_id": cid}
 
     @app.get("/pipeline")
     async def get_pipeline(request: Request):

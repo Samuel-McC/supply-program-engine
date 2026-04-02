@@ -203,6 +203,35 @@ Manual `run-once` API endpoints remain available for local operation, replay, an
 
 ---
 
+## Observability and Tracing
+
+Phase 23 adds lightweight runtime tracing around the main workflow boundaries.
+
+The tracing layer is intentionally separate from the ledger:
+
+- ledger events remain the durable audit record
+- logs remain the operational event stream
+- spans provide ephemeral runtime visibility across API, queue, worker, and phase boundaries
+
+Instrumentation is kept at workflow edges such as:
+
+- candidate ingress
+- enrichment
+- qualification/orchestration
+- outbound draft generation
+- approval and send
+- provider send
+- reply triage
+- learning
+- queue enqueue
+- worker dispatch
+
+When enabled, spans are annotated with existing identifiers like `correlation_id`, `entity_id`, `event_type`, `task_type`, and `provider_name`.
+
+Local development stays safe through a no-op fallback when OpenTelemetry packages or collectors are not present, and a console exporter can be used when the SDK is available.
+
+---
+
 ## Operator Console
 
 The console is implemented with:

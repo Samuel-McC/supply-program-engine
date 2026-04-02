@@ -3,6 +3,8 @@ import logging
 import uuid
 from datetime import datetime, timezone
 
+from supply_program_engine.observability import current_trace_ids
+
 def get_logger(name: str):
     logger = logging.getLogger(name)
     logger.setLevel(logging.INFO)
@@ -25,6 +27,10 @@ class JsonFormatter(logging.Formatter):
 
         if hasattr(record, "correlation_id"):
             log_record["correlation_id"] = record.correlation_id
+
+        trace_ids = current_trace_ids()
+        if trace_ids:
+            log_record.update(trace_ids)
 
         return json.dumps(log_record)
 
