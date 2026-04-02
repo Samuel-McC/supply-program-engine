@@ -9,3 +9,5 @@ __pycache__
 data
 full_tree.txt
 tracked_files.txt
+.DS_Store
+*.egg-info

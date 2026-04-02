@@ -4,4 +4,8 @@ sqlalchemy
 psycopg[binary]
 pydantic
 alembic
+jinja2
+python-multipart
+requests
 pytest
+httpx

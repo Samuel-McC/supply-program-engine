@@ -10,5 +10,26 @@ services:
     volumes:
       - spe_pgdata:/var/lib/postgresql/data
 
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      LEDGER_BACKEND: db
+      DATABASE_URL: postgresql+psycopg://spe:spe_password@db:5432/spe
+      QUEUE_BACKEND: sync
+      REDIS_URL: redis://redis:6379/0
+      OTEL_ENABLED: "false"
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+      - redis
+
 volumes:
   spe_pgdata:
