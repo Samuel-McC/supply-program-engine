@@ -1,88 +1,103 @@
-# Security Controls Matrix
+# Security Controls
 
-This document maps implemented controls to security standards.
+This document describes the current security posture of the repository and runtime.
+It is intentionally split between controls that are implemented today and controls
+that are planned for later phases.
 
----
+This project should be described as privacy-aware and GDPR-aware, not as
+"GDPR compliant." Real deployment still requires legal, privacy, and security review.
 
-# Authentication
+## Implemented Today
 
-Planned controls:
+### Authentication and Authorization
 
-- OIDC authentication provider
-- MFA enforced at identity provider
-- secure session cookies
-- CSRF protection
+- Sensitive non-dev API write endpoints can be gated by a shared `ADMIN_API_KEY`.
+- Candidate ingress uses HMAC request signing outside `ENV=dev`.
+- The server-rendered operator UI does not yet implement user authentication,
+  sessions, or RBAC.
+- Approval and send actions are tracked with actor fields where the workflow
+  captures them, but actor identity is not yet backed by authenticated sessions.
 
----
+### Audit and Traceability
 
-# Authorization
+- Business workflow state changes are written to an append-only event ledger.
+- Events include `correlation_id`, `entity_id`, timestamps, and structured payloads.
+- Approval and rejection events include actor and reason fields.
+- Logs are structured JSON and include `correlation_id` when provided.
+- Lightweight tracing can attach runtime trace/span IDs to logs when enabled.
 
-Role model:
+### Idempotency and Duplicate Protection
 
-Operator roles include:
+- Mutating workflow events use deterministic event IDs.
+- Phase runners are safe to re-run and skip duplicate event emission.
+- Irreversible outbound sends are gated by approval, policy checks, provider
+  lifecycle events, and duplicate detection.
+- Queue-backed execution reuses the same deterministic runners rather than
+  introducing a separate non-idempotent code path.
 
-- reviewer
-- approver
-- sender
+### Direct Marketing Controls
 
-Actions such as approval and sending require authenticated sessions.
+- Config-based suppression exists through `SUPPRESSED_ENTITIES` and `SUPPRESSED_DOMAINS`.
+- Reply triage records `unsubscribe_recorded`.
+- Unsubscribe now sets an explicit marketing-suppressed state in projections and
+  blocks future send attempts through policy evaluation.
 
----
+### Secret Handling
 
-# Audit Logging
+- `.env` files are ignored by git.
+- `.env.example` is sanitized and intended only as a local template.
+- Runtime secrets are expected through environment variables.
+- The repo avoids committing live API keys or provider credentials.
 
-All significant system actions are recorded in the event ledger.
+### Supply Chain and Build Posture
 
-Logged events include:
+- GitHub Actions run tests on pull requests and main-branch changes.
+- A dedicated security workflow runs `bandit` and `pip-audit`.
+- Docker runs the app as a non-root user.
+- Dependency versions are pinned in `requirements.txt`.
 
-- ingestion
-- scoring
-- draft creation
-- approval decisions
-- send attempts
-- send completion
+### Runtime and Infrastructure Posture
 
-Audit records include:
+- The app defaults to local development mode unless configured otherwise.
+- Docker Compose is intended for local developer use and does not represent a hardened deployment boundary.
+- PostgreSQL and Redis are isolated to local-compose networking in the demo setup.
+- The append-only ledger model supports replay and integrity-oriented verification in file mode.
 
-- actor
-- timestamp
-- decision reason
-- correlation ID
+## Planned Controls
 
----
+### Authentication and Authorization
 
-# Idempotency
+- Identity-backed operator authentication
+- Session management
+- RBAC for reviewer / approver / sender roles
+- UI access controls for administrative actions
 
-Mutating operations use deterministic IDs.
+### Secrets and Key Management
 
-Duplicate events are rejected by the ledger.
+- Secret manager or KMS integration
+- Credential rotation procedures
+- Separate credentials by environment
 
-External side effects are gated through the outbox pattern.
+### Platform Hardening
 
----
+- Network boundary hardening for real deployments
+- Managed TLS termination and secure ingress
+- Stronger backup encryption and restore validation
+- SBOM generation and artifact attestation
+- Dependency update automation
+- Dedicated secret scanning in CI
 
-# Supply Chain Security
+### Privacy and Governance
 
-The project implements:
+- Authenticated audit trails tied to real user identities
+- Formal retention/deletion workflows
+- Access review and incident response processes
 
-- GitHub Actions security scanning
-- Bandit static analysis
-- pip-audit dependency scanning
+## Portfolio / Demo Caveats
 
-Planned additions:
-
-- Dependabot updates
-- SBOM generation
-
----
-
-# Infrastructure Security
-
-Deployment uses:
-
-- Docker containers
-- non-root runtime
-- minimal network exposure
-- private admin access
-
-Backups and recovery procedures are documented separately.
+- The current UI should be treated as an internal demo/admin surface, not an
+  internet-exposed product.
+- Shared-key admin protection is better than open write access, but it is not a
+  substitute for real authentication and authorization.
+- The event ledger is intentionally durable for replay and audit, which means
+  privacy-sensitive lifecycle controls must be designed carefully before production use.

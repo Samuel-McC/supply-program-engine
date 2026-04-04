@@ -164,6 +164,8 @@ class PipelineEntityView(BaseModel):
     lead_interested: bool = False
     lead_rejected: bool = False
     unsubscribe_recorded: bool = False
+    marketing_suppressed: bool = False
+    marketing_suppression_reason: Optional[str] = None
     reply_out_of_office: bool = False
     reply_triage_error_type: Optional[str] = None
     reply_triage_error_message: Optional[str] = None

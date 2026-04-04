@@ -136,6 +136,17 @@ flowchart LR
 - Docker
 - Lightweight tracing / observability hooks
 
+## Data handling notes
+
+- Local `.env` files are runtime secrets and are intentionally not tracked.
+- Local `data/ledger.jsonl`, logs, traces, and demo outputs are runtime artifacts, not source code.
+- Demo seed data is suitable for walkthroughs and tests, not for mixing with operational records.
+- Data/security posture docs live in:
+  - `docs/security-controls.md`
+  - `docs/threat-model.md`
+  - `docs/data-retention.md`
+  - `docs/privacy-boundaries.md`
+
 
 ## What this project demonstrates
 

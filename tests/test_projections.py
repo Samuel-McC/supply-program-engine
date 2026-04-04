@@ -260,6 +260,8 @@ def test_projection_tracks_reply_triage_state(tmp_path, monkeypatch):
     assert v.last_reply_received_at == "2026-04-01T12:10:00+00:00"
     assert v.last_reply_text_snippet == "Please unsubscribe me from future emails."
     assert v.unsubscribe_recorded is True
+    assert v.marketing_suppressed is True
+    assert v.marketing_suppression_reason == "unsubscribe"
 
 
 def test_projection_tracks_learning_feedback_state(tmp_path, monkeypatch):

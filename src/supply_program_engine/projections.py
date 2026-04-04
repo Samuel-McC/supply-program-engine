@@ -185,6 +185,8 @@ def build_pipeline_state() -> Dict[str, PipelineEntityView]:
 
         elif et == EventType.UNSUBSCRIBE_RECORDED.value:
             view.unsubscribe_recorded = True
+            view.marketing_suppressed = True
+            view.marketing_suppression_reason = "unsubscribe"
 
         elif et == EventType.REPLY_TRIAGE_FAILED.value:
             view.reply_triage_status = "failed"

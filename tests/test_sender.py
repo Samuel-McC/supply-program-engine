@@ -244,3 +244,36 @@ def test_sender_blocks_already_sent_entities_without_resending(tmp_path, monkeyp
     assert requested == []
     assert blocked[0]["payload"]["blocked_reasons"] == ["already_sent"]
     assert len(sent) == 1
+
+
+def test_sender_blocks_unsubscribed_entities_from_future_outreach(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "LEDGER_PATH", str(tmp_path / "ledger.jsonl"))
+    monkeypatch.setattr(settings, "LEDGER_BACKEND", "file")
+
+    _append_candidate("entity-unsubscribed", "https://acme-panels.example")
+    ledger.append(
+        {
+            "event_id": "entity-unsubscribed-unsubscribe",
+            "event_type": EventType.UNSUBSCRIBE_RECORDED.value,
+            "correlation_id": "c1",
+            "entity_id": "entity-unsubscribed",
+            "payload": {
+                "reply_key": "reply-1",
+                "received_at": "2026-04-04T09:00:00+00:00",
+                "reply_text_snippet": "unsubscribe",
+                "classification": "unsubscribe",
+                "matched_phrase": "unsubscribe",
+            },
+        }
+    )
+    _append_draft("entity-unsubscribed", draft_id="draft-unsubscribed")
+    _append_outbox_ready("entity-unsubscribed", draft_id="draft-unsubscribed")
+
+    result = run_once(limit=10)
+
+    assert result["emitted"] == 0
+    assert result["blocked"] == 1
+
+    blocked = [e for e in ledger.read() if e.get("event_type") == EventType.OUTBOUND_SEND_BLOCKED.value]
+    assert len(blocked) == 1
+    assert blocked[0]["payload"]["blocked_reasons"] == ["marketing_suppressed:unsubscribe"]

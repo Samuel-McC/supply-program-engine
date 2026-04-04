@@ -18,6 +18,14 @@ venv/
 
 # Local generated data
 data/*.jsonl
+data/*.log
+data/exports/
+data/tmp/
+logs/
+traces/
+artifacts/
+tracked_files.txt
+*.trace.json
 
 # Alembic cache
 alembic/versions/*.pyc
@@ -28,4 +36,11 @@ alembic/versions/__pycache__/
 
 # Editor
 .vscode/
+
+# Coverage / local reports
+.coverage
+coverage.xml
+htmlcov/
+
+# Local repository exports
 full_tree.txt

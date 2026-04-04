@@ -75,6 +75,11 @@ def evaluate_send_policy(entity_id: str, entity: PipelineEntityView) -> PolicyDe
     if domain and domain in rules.suppressed_domains:
         blocked_reasons.append(f"domain_suppressed:{domain}")
 
+    if entity.marketing_suppressed or entity.unsubscribe_recorded:
+        blocked_reasons.append(
+            f"marketing_suppressed:{entity.marketing_suppression_reason or 'direct_marketing_objected'}"
+        )
+
     if ledger.any_event_for_entity(entity_id, EventType.OUTBOUND_SENT.value):
         blocked_reasons.append("already_sent")
 
