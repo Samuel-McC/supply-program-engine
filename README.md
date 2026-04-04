@@ -74,6 +74,47 @@ Reply Triage
 Learning / Outcome Feedback
 ```
 
+## Architecture Diagram
+
+```mermaid
+flowchart LR
+    A[Candidate Ingest / Discovery] --> B[Event Ledger]
+    B --> C[Enrichment]
+    C --> D[Qualification]
+    D --> E[Draft Generation]
+    E --> F[Approval]
+    F --> G[Policy / Suppression Gate]
+    G --> H[Provider Send]
+    H --> I[Reply Triage]
+    I --> J[Learning / Outcome Feedback]
+
+    B --> K[Projections]
+    C --> K
+    D --> K
+    E --> K
+    F --> K
+    G --> K
+    H --> K
+    I --> K
+    J --> K
+
+    K --> L[Operator UI]
+
+    M[Queue / Worker Runtime] --> C
+    M --> H
+    M --> J
+
+    N[Redis] --> M
+    O[PostgreSQL] --> B
+    O --> K
+
+    P[Observability / Tracing] --- C
+    P --- D
+    P --- E
+    P --- H
+    P --- I
+    P --- J
+```
 
 ## Core design principles
 - Deterministic workflows over ad hoc automation
