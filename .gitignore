@@ -28,3 +28,4 @@ alembic/versions/__pycache__/
 
 # Editor
 .vscode/
+full_tree.txt
