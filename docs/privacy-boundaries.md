@@ -1,20 +1,21 @@
 # Privacy Boundaries
 
-This document defines the data classes handled by the system and the current
-privacy boundary between implemented behavior and planned controls.
+This document defines the main data classes in the system and the current
+boundary between implemented behavior and planned controls.
 
 ## Data Classes
 
-### Workflow / event data
+### Workflow and event data
 
 Stored in the append-only ledger:
 
 - candidate details
 - qualification outputs
-- compliance findings
-- drafts and approval decisions
-- send lifecycle events
+- approvals and outbound send lifecycle events
+- suppression records
+- subject-rights requests and status changes
 - reply triage outcomes
+- retention-review and redaction events
 - learning feedback
 
 Purpose:
@@ -29,56 +30,62 @@ Examples:
 
 - provider name
 - provider message ID
-- accepted / failed timestamps
-- failure reasons
+- requested/accepted/failed timestamps
+- failure reason
 
 Purpose:
 
-- auditability of outbound side effects
-- reconciliation and debugging
+- outbound auditability and reconciliation
 
 ### Reply text and user-provided content
 
 Examples:
 
 - inbound reply text
-- reply snippets
-- reply classifications
+- reply text snippets
+- operator notes on suppression/subject requests
+
+Implemented boundary:
+
+- reply text can enter the ledger at ingest time
+- reply text/snippets can later be redacted through additive events
+- projections, sanitized timelines, and exports should prefer the redacted view
+
+Planned later:
+
+- broader field-level minimisation and pseudonymisation
+
+### Suppression and subject-rights state
+
+Examples:
+
+- entity/domain/email suppressions
+- objection-to-marketing, erasure, rectification, and access-export requests
 
 Purpose:
 
-- deterministic triage
-- suppression / objection handling
-- downstream learning signals
-
-Boundary:
-
-- reply text is workflow data and may enter the ledger today
-- further minimisation or redaction is planned, not implemented
+- block future outreach
+- give operators an explicit workflow record instead of ad hoc notes
+- support privacy-aware audit/export posture
 
 ### Operational logs and traces
 
 Examples:
 
-- JSON application logs
-- optional trace/span IDs
-- local console tracing output
-
-Purpose:
-
-- runtime debugging
-- operator/developer observability
+- JSON logs
+- trace/span IDs
+- local console tracing
 
 Boundary:
 
-- logs/traces are not the source of truth
-- the ledger remains the durable audit system
+- useful for runtime diagnosis, not the source of truth
+- should avoid secrets and unnecessary personal data
 
 ### Secrets and config
 
 Examples:
 
-- admin API key
+- `ADMIN_API_KEY`
 - provider credentials
 - HMAC secret
 - environment configuration
@@ -86,30 +93,31 @@ Examples:
 Boundary:
 
 - expected from environment variables or local `.env`
-- not intended to be stored in source control
+- not intended for source control
 
-### Demo and seed data
+### Demo and runtime artifacts
 
 Examples:
 
-- local demo seed outputs
 - local `data/ledger.jsonl`
+- generated exports
+- caches, traces, and local seed outputs
 
 Boundary:
 
-- portfolio/demo only
-- should not be treated as production operational records
+- runtime/operator data, not source code
+- should be handled separately from tracked fixtures
 
 ### AI-ready derived content
 
 Current state:
 
-- not implemented as a dedicated data class
+- not implemented as a separate data class
 
 Planned later:
 
-- if AI features are introduced, AI-ready derived content should be treated as a
-  separate class with explicit minimisation, retention, and prompt-safety controls
+- if AI features are added, derived prompt/context data should have explicit
+  minimisation, logging, and retention controls
 
 ## Suppression vs Deletion
 
@@ -117,42 +125,31 @@ Planned later:
 
 Implemented today:
 
-- config-based entity/domain suppression
-- unsubscribe-driven marketing suppression
+- config-based suppression
+- first-class suppression registry in the ledger
+- unsubscribe and objection-to-marketing enforcement through suppression events
 
 Meaning:
 
-- block future outreach
-- retain existing audit history
+- future outreach is blocked
+- historical audit state is preserved
 
 ### Deletion / erasure
 
 Implemented today:
 
-- no automated deletion workflow
-
-Planned posture:
-
-- remove or redact non-essential operational copies first
-- evaluate pseudonymisation of retained audit records where lawful and practical
-- define backup handling expectations
-- document legal basis for any retained history
-
-## Data Minimisation Posture
-
-Implemented today:
-
-- enrichment stores structured signals instead of full-page archives
-- provider flow stores metadata rather than full provider payload dumps
-- suppression can be enforced without deleting audit history
+- no destructive mutation of historical ledger events
+- erasure is modeled as explicit subject-request state plus additive redaction
+  for reply text where supported
 
 Still planned:
 
-- stricter minimisation for reply text retention
-- export/redaction tooling
-- formal privacy review for real deployment
+- broader pseudonymisation
+- backup handling
+- legal basis review for retained audit history
 
 ## Legal Honesty
 
-This repository is designed to show privacy-aware engineering posture.
-It should not be represented as fully GDPR compliant or ready for regulated production use without additional legal, privacy, and security review.
+This repository demonstrates a privacy-aware and compliance-aware engineering
+posture. It should not be represented as fully GDPR compliant or ready for
+regulated production use without additional legal, privacy, and security review.

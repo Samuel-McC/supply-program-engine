@@ -8,15 +8,28 @@ import time
 from typing import Optional
 
 from fastapi import FastAPI, Header, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 from fastapi import Form
 from fastapi.responses import RedirectResponse
-from supply_program_engine.models import ApprovalDecision
 
 from supply_program_engine import ledger
 from supply_program_engine.config import settings
+from supply_program_engine.data_controls import (
+    build_entity_export,
+    create_subject_request,
+    record_suppression,
+    retention_run_once,
+    update_subject_request_status,
+)
+from supply_program_engine.data_controls.models import (
+    SubjectRequestRecord,
+    SubjectRequestStatusUpdate,
+    SuppressionRecord,
+    iso_now,
+)
+from supply_program_engine.data_controls.redaction import sanitized_entity_timeline
 from supply_program_engine.enrichment import run_once as enrichment_run_once
 from supply_program_engine.identity import stable_entity_id
 from supply_program_engine.learning import run_once as learning_run_once
@@ -27,7 +40,7 @@ from supply_program_engine.observability import initialize_tracing, trace_span
 from supply_program_engine.orchestrator import run_once as phase3_run_once
 from supply_program_engine.outbound.orchestrator import run_once as outbound_run_once
 from supply_program_engine.outbound.sender import run_once as sender_run_once
-from supply_program_engine.projections import build_pipeline_state, entity_timeline, rank_pipeline
+from supply_program_engine.projections import build_pipeline_state, rank_pipeline
 from supply_program_engine.queue import QueueUnavailableError, TaskMessage, enqueue_task
 from supply_program_engine.reply_triage import process_reply
 from supply_program_engine.workers.runner import run_once as worker_run_once
@@ -258,6 +271,126 @@ def create_app() -> FastAPI:
         log.info("learning_run_once", extra={"correlation_id": cid, **result})
         return {"correlation_id": cid, **result}
 
+    @app.post("/data-controls/suppression")
+    async def data_controls_record_suppression(
+        suppression: SuppressionRecord,
+        request: Request,
+        x_admin_api_key: Optional[str] = Header(default=None),
+    ):
+        _require_admin_api_key(x_admin_api_key)
+        cid = getattr(request.state, "correlation_id", generate_correlation_id())
+        with trace_span(
+            "api.data_controls.record_suppression",
+            correlation_id=cid,
+            entity_id=suppression.entity_id,
+            task_type="data_controls",
+            extra={"target_type": suppression.target_type, "reason": suppression.reason},
+        ):
+            result = record_suppression(suppression, correlation_id=cid)
+        log.info("suppression_recorded", extra={"correlation_id": cid, **result})
+        return {"correlation_id": cid, **result}
+
+    @app.post("/data-controls/subject-request")
+    async def data_controls_create_subject_request(
+        subject_request: SubjectRequestRecord,
+        request: Request,
+        x_admin_api_key: Optional[str] = Header(default=None),
+    ):
+        _require_admin_api_key(x_admin_api_key)
+        cid = getattr(request.state, "correlation_id", generate_correlation_id())
+        with trace_span(
+            "api.data_controls.create_subject_request",
+            correlation_id=cid,
+            entity_id=subject_request.entity_id,
+            task_type="data_controls",
+            extra={"request_type": subject_request.request_type, "target_type": subject_request.target_type},
+        ):
+            result = create_subject_request(subject_request, correlation_id=cid)
+        log.info("subject_request_recorded", extra={"correlation_id": cid, **result})
+        return {"correlation_id": cid, **result}
+
+    @app.post("/data-controls/subject-request/status")
+    async def data_controls_update_subject_request_status(
+        update: SubjectRequestStatusUpdate,
+        request: Request,
+        x_admin_api_key: Optional[str] = Header(default=None),
+    ):
+        _require_admin_api_key(x_admin_api_key)
+        cid = getattr(request.state, "correlation_id", generate_correlation_id())
+        with trace_span(
+            "api.data_controls.update_subject_request_status",
+            correlation_id=cid,
+            task_type="data_controls",
+            extra={"request_id": update.request_id, "status": update.status},
+        ):
+            try:
+                result = update_subject_request_status(update, correlation_id=cid)
+            except ValueError as exc:
+                raise HTTPException(status_code=404, detail=str(exc))
+        log.info("subject_request_status_updated", extra={"correlation_id": cid, **result})
+        return {"correlation_id": cid, **result}
+
+    @app.post("/data-controls/retention/run-once")
+    async def data_controls_retention_run_once(
+        request: Request,
+        limit: int = 50,
+        x_admin_api_key: Optional[str] = Header(default=None),
+    ):
+        _require_admin_api_key(x_admin_api_key)
+        cid = getattr(request.state, "correlation_id", generate_correlation_id())
+        with trace_span(
+            "api.data_controls.retention_run_once",
+            correlation_id=cid,
+            task_type="data_controls",
+            extra={"limit": limit},
+        ):
+            result = retention_run_once(limit=limit)
+        log.info("retention_run_once", extra={"correlation_id": cid, **result})
+        return {"correlation_id": cid, **result}
+
+    @app.get("/data-controls/export/entity/{entity_id}")
+    async def data_controls_export_entity(
+        entity_id: str,
+        request: Request,
+        x_admin_api_key: Optional[str] = Header(default=None),
+    ):
+        _require_admin_api_key(x_admin_api_key)
+        cid = getattr(request.state, "correlation_id", generate_correlation_id())
+        with trace_span(
+            "api.data_controls.export_entity",
+            correlation_id=cid,
+            entity_id=entity_id,
+            task_type="data_controls",
+        ):
+            try:
+                export = build_entity_export(entity_id)
+            except ValueError as exc:
+                raise HTTPException(status_code=404, detail=str(exc))
+            export_event_id = ledger.generate_event_id(
+                {
+                    "event_type": EventType.DATA_EXPORT_GENERATED.value,
+                    "entity_id": entity_id,
+                    "correlation_id": cid,
+                }
+            )
+            if not ledger.exists(export_event_id):
+                ledger.append(
+                    {
+                        "event_id": export_event_id,
+                        "event_type": EventType.DATA_EXPORT_GENERATED.value,
+                        "correlation_id": cid,
+                        "entity_id": entity_id,
+                        "payload": {
+                            "export_type": "entity_summary",
+                            "generated_at": iso_now(),
+                            "subject_request_count": len(export["subject_requests"]),
+                            "suppression_count": len(export["suppression_state"]),
+                        },
+                    }
+                )
+        log.info("entity_export_generated", extra={"correlation_id": cid, "entity_id": entity_id})
+        return {"correlation_id": cid, **export}
+
     @app.post("/queue/enqueue")
     async def queue_enqueue(
         task: TaskMessage,
@@ -399,7 +532,7 @@ def create_app() -> FastAPI:
     @app.get("/entity/{entity_id}")
     async def get_entity(entity_id: str, request: Request):
         cid = getattr(request.state, "correlation_id", generate_correlation_id())
-        events = entity_timeline(entity_id)
+        events = sanitized_entity_timeline(entity_id)
         if not events:
             raise HTTPException(status_code=404, detail="Entity not found")
         return {"correlation_id": cid, "entity_id": entity_id, "events": events}
@@ -470,7 +603,7 @@ def create_app() -> FastAPI:
         if not entity:
             raise HTTPException(status_code=404, detail="Entity not found")
 
-        events = entity_timeline(entity_id)
+        events = sanitized_entity_timeline(entity_id)
 
         return _template_response(request, "entity_detail.html", entity=entity, events=events)
 

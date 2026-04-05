@@ -3,6 +3,9 @@ from __future__ import annotations
 from typing import Dict, List
 
 from supply_program_engine import ledger
+from supply_program_engine.data_controls.redaction import redaction_overlays
+from supply_program_engine.data_controls.subject_requests import subject_requests_for_entity
+from supply_program_engine.data_controls.suppression import active_suppressions_for_entity
 from supply_program_engine.models import EventType, PipelineEntityView
 
 
@@ -106,6 +109,7 @@ def build_pipeline_state() -> Dict[str, PipelineEntityView]:
             view.draft_id = payload.get("draft_id", view.draft_id) or rec.get("event_id")
             view.draft_subject = payload.get("subject", view.draft_subject)
             view.draft_body = payload.get("body", view.draft_body)
+            view.draft_to_hint = payload.get("to_hint", view.draft_to_hint)
             view.template_version = payload.get("template_version", view.template_version)
             view.status = "draft_created"
 
@@ -159,6 +163,7 @@ def build_pipeline_state() -> Dict[str, PipelineEntityView]:
             view.status = "sent"
 
         elif et == EventType.REPLY_RECEIVED.value:
+            view.last_reply_key = payload.get("reply_key", view.last_reply_key)
             view.reply_triage_status = "received"
             view.last_reply_received_at = payload.get("received_at", view.last_reply_received_at)
             view.last_reply_text_snippet = payload.get("reply_text_snippet", view.last_reply_text_snippet)
@@ -166,6 +171,7 @@ def build_pipeline_state() -> Dict[str, PipelineEntityView]:
             view.reply_triage_error_message = None
 
         elif et == EventType.REPLY_CLASSIFIED.value:
+            view.last_reply_key = payload.get("reply_key", view.last_reply_key)
             classification = payload.get("classification", view.last_reply_classification)
             view.reply_triage_status = "classified"
             view.last_reply_classification = classification
@@ -189,6 +195,7 @@ def build_pipeline_state() -> Dict[str, PipelineEntityView]:
             view.marketing_suppression_reason = "unsubscribe"
 
         elif et == EventType.REPLY_TRIAGE_FAILED.value:
+            view.last_reply_key = payload.get("reply_key", view.last_reply_key)
             view.reply_triage_status = "failed"
             view.last_reply_received_at = payload.get("received_at", view.last_reply_received_at)
             view.reply_triage_error_type = payload.get("error_type", view.reply_triage_error_type)
@@ -230,6 +237,47 @@ def build_pipeline_state() -> Dict[str, PipelineEntityView]:
                 view.learning_template_performance_note,
             )
             view.learning_last_updated_at = ts or view.learning_last_updated_at
+
+        elif et == EventType.DATA_REDACTION_APPLIED.value:
+            if payload.get("reply_key") == view.last_reply_key:
+                view.reply_text_redacted = True
+                view.reply_text_redacted_at = payload.get("applied_at", view.reply_text_redacted_at)
+                view.last_reply_text_snippet = payload.get("replacement_text", view.last_reply_text_snippet)
+
+        elif et == EventType.RETENTION_REVIEWED.value:
+            if payload.get("reply_key") == view.last_reply_key:
+                view.retention_status = payload.get("action", view.retention_status)
+                view.retention_last_reviewed_at = payload.get("reviewed_at", view.retention_last_reviewed_at)
+                reason = payload.get("reason")
+                if reason and reason not in view.retention_notes:
+                    view.retention_notes.append(reason)
+
+    overlays = redaction_overlays()
+    for view in state.values():
+        if view.last_reply_key and view.last_reply_key in overlays:
+            overlay = overlays[view.last_reply_key]
+            view.reply_text_redacted = True
+            view.reply_text_redacted_at = overlay.get("applied_at", view.reply_text_redacted_at)
+            view.last_reply_text_snippet = overlay.get("replacement_text", view.last_reply_text_snippet)
+            note = overlay.get("reason")
+            if note and note not in view.retention_notes:
+                view.retention_notes.append(str(note))
+
+        suppressions = active_suppressions_for_entity(view)
+        view.active_suppressions = suppressions
+        if suppressions:
+            view.marketing_suppressed = True
+            if not view.marketing_suppression_reason:
+                view.marketing_suppression_reason = str(suppressions[-1].get("reason"))
+
+        subject_requests = subject_requests_for_entity(view)
+        view.subject_request_summaries = subject_requests
+        if subject_requests:
+            latest = subject_requests[-1]
+            view.latest_subject_request_id = latest.get("request_id")
+            view.latest_subject_request_type = latest.get("request_type")
+            view.latest_subject_request_status = latest.get("status")
+            view.latest_subject_request_updated_at = latest.get("updated_at") or latest.get("requested_at")
 
     return state
 

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from supply_program_engine import ledger
+from supply_program_engine.data_controls.models import SuppressionRecord
+from supply_program_engine.data_controls.suppression import record_suppression
 from supply_program_engine.logging import generate_correlation_id, get_logger
 from supply_program_engine.models import EventType, InboundReply
 from supply_program_engine.observability import trace_span
@@ -102,6 +104,23 @@ def process_reply(reply: InboundReply, correlation_id: str | None = None) -> dic
                     )
                     emitted_event_ids.append(outcome_event_id)
 
+            suppression_event_id = None
+            if result.classification == "unsubscribe":
+                suppression_result = record_suppression(
+                    SuppressionRecord(
+                        target_type="entity",
+                        target_value=entity_id,
+                        reason="unsubscribe",
+                        source="reply_triage",
+                        notes="Derived from unsubscribe reply classification.",
+                        entity_id=entity_id,
+                    ),
+                    correlation_id=cid,
+                )
+                suppression_event_id = suppression_result["event_id"]
+                if suppression_result["status"] == "recorded":
+                    emitted_event_ids.append(str(suppression_event_id))
+
             log.info(
                 "reply_triage_processed",
                 extra={
@@ -118,6 +137,7 @@ def process_reply(reply: InboundReply, correlation_id: str | None = None) -> dic
                 "reply_key": reply_key,
                 "classification": result.classification,
                 "derived_event_type": outcome_event_type.value if outcome_event_type else None,
+                "suppression_event_id": suppression_event_id,
                 "event_ids": emitted_event_ids,
             }
         except Exception as exc:

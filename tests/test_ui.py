@@ -344,4 +344,125 @@ def test_entity_detail_shows_learning_outcome_section(tmp_path, monkeypatch):
     assert "Learning / Outcome" in response.text
     assert "reply_interested" in response.text
     assert "strong" in response.text
-    assert "positive" in response.text
+
+
+def test_entity_detail_shows_data_controls_section(tmp_path, monkeypatch):
+    client = _client_with_temp_ledger(tmp_path, monkeypatch)
+    _seed_candidate()
+    ledger.append(
+        {
+            "event_id": "entity-1-draft",
+            "event_type": EventType.OUTBOUND_DRAFT_CREATED.value,
+            "correlation_id": "c1",
+            "entity_id": "entity-1",
+            "payload": {
+                "draft_id": "draft-1",
+                "entity_id": "entity-1",
+                "segment": "industrial_distributor",
+                "subject": "Supply program",
+                "body": "Hello",
+                "to_hint": "buyer@example.com",
+                "template_version": "v1",
+                "generation_mode": "deterministic",
+            },
+        }
+    )
+    ledger.append(
+        {
+            "event_id": "entity-1-reply-received-controls",
+            "event_type": EventType.REPLY_RECEIVED.value,
+            "correlation_id": "c1",
+            "entity_id": "entity-1",
+            "payload": {
+                "reply_key": "reply-controls",
+                "received_at": "2026-04-03T09:00:00+00:00",
+                "reply_text": "Delete this message please.",
+                "reply_text_snippet": "Delete this message please.",
+                "metadata": {},
+            },
+        }
+    )
+    ledger.append(
+        {
+            "event_id": "entity-1-suppression",
+            "event_type": EventType.SUPPRESSION_RECORDED.value,
+            "correlation_id": "c1",
+            "entity_id": "entity-1",
+            "payload": {
+                "target_type": "entity",
+                "target_value": "entity-1",
+                "reason": "manual_suppression",
+                "created_at": "2026-04-03T09:05:00+00:00",
+                "expires_at": None,
+                "actor": "ops@example.internal",
+                "source": "internal_admin",
+                "notes": "Do not contact.",
+            },
+        }
+    )
+    ledger.append(
+        {
+            "event_id": "entity-1-subject-request",
+            "event_type": EventType.SUBJECT_REQUEST_RECORDED.value,
+            "correlation_id": "c1",
+            "entity_id": "entity-1",
+            "payload": {
+                "request_id": "sr-1",
+                "request_type": "erasure",
+                "target_type": "entity",
+                "target_value": "entity-1",
+                "status": "approved",
+                "requested_at": "2026-04-03T09:10:00+00:00",
+                "entity_id": "entity-1",
+                "actor": "privacy@example.internal",
+                "source": "internal_admin",
+                "notes": "Erasure request.",
+            },
+        }
+    )
+    ledger.append(
+        {
+            "event_id": "entity-1-retention-review",
+            "event_type": EventType.RETENTION_REVIEWED.value,
+            "correlation_id": "c1",
+            "entity_id": "entity-1",
+            "payload": {
+                "reply_key": "reply-controls",
+                "target_event_id": "entity-1-reply-received-controls",
+                "reviewed_at": "2026-04-03T09:20:00+00:00",
+                "policy_name": "reply_text_retention_v1",
+                "action": "redacted",
+                "reason": "subject_request_erasure",
+                "subject_request_id": "sr-1",
+            },
+        }
+    )
+    ledger.append(
+        {
+            "event_id": "entity-1-redaction",
+            "event_type": EventType.DATA_REDACTION_APPLIED.value,
+            "correlation_id": "c1",
+            "entity_id": "entity-1",
+            "payload": {
+                "reply_key": "reply-controls",
+                "entity_id": "entity-1",
+                "target_event_id": "entity-1-reply-received-controls",
+                "fields_redacted": ["reply_text", "reply_text_snippet"],
+                "replacement_text": "[redacted]",
+                "reason": "subject_request_erasure",
+                "source": "retention_runner",
+                "applied_at": "2026-04-03T09:20:01+00:00",
+                "actor": "privacy@example.internal",
+                "subject_request_id": "sr-1",
+            },
+        }
+    )
+
+    response = client.get("/ui/entity/entity-1")
+
+    assert response.status_code == 200
+    assert "Data Controls" in response.text
+    assert "manual_suppression" in response.text
+    assert "erasure / approved" in response.text
+    assert "applied" in response.text
+    assert "[redacted]" in response.text

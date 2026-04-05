@@ -46,6 +46,8 @@ class Settings(BaseModel):
     OTEL_ENABLED: bool = os.getenv("OTEL_ENABLED", "false").lower() == "true"
     OTEL_SERVICE_NAME: str = os.getenv("OTEL_SERVICE_NAME", "supply-program-engine")
     OTEL_EXPORTER_TYPE: str = os.getenv("OTEL_EXPORTER_TYPE", "console")
+    REPLY_TEXT_RETENTION_DAYS: int = int(os.getenv("REPLY_TEXT_RETENTION_DAYS", "30"))
+    REDACTION_PLACEHOLDER: str = os.getenv("REDACTION_PLACEHOLDER", "[redacted]")
 
 
 

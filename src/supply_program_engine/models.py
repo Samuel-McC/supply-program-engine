@@ -31,6 +31,12 @@ class EventType(str, Enum):
     SCORING_FEEDBACK_GENERATED = "scoring_feedback_generated"
     SOURCE_PERFORMANCE_UPDATED = "source_performance_updated"
     TEMPLATE_PERFORMANCE_UPDATED = "template_performance_updated"
+    SUPPRESSION_RECORDED = "suppression_recorded"
+    SUBJECT_REQUEST_RECORDED = "subject_request_recorded"
+    SUBJECT_REQUEST_STATUS_UPDATED = "subject_request_status_updated"
+    DATA_REDACTION_APPLIED = "data_redaction_applied"
+    RETENTION_REVIEWED = "retention_reviewed"
+    DATA_EXPORT_GENERATED = "data_export_generated"
 
 
 class Candidate(BaseModel):
@@ -132,6 +138,7 @@ class PipelineEntityView(BaseModel):
     draft_id: Optional[str] = None
     draft_subject: Optional[str] = None
     draft_body: Optional[str] = None
+    draft_to_hint: Optional[str] = None
     template_version: Optional[str] = None
 
     approved_by: Optional[str] = None
@@ -158,6 +165,7 @@ class PipelineEntityView(BaseModel):
     sent_at: Optional[str] = None
 
     reply_triage_status: Optional[str] = None
+    last_reply_key: Optional[str] = None
     last_reply_classification: Optional[str] = None
     last_reply_received_at: Optional[str] = None
     last_reply_text_snippet: Optional[str] = None
@@ -169,6 +177,8 @@ class PipelineEntityView(BaseModel):
     reply_out_of_office: bool = False
     reply_triage_error_type: Optional[str] = None
     reply_triage_error_message: Optional[str] = None
+    reply_text_redacted: bool = False
+    reply_text_redacted_at: Optional[str] = None
     latest_outcome: Optional[str] = None
     learning_outcome_version: Optional[str] = None
     learning_source_quality: Optional[str] = None
@@ -177,6 +187,15 @@ class PipelineEntityView(BaseModel):
     learning_source_performance_note: Optional[str] = None
     learning_template_performance_note: Optional[str] = None
     learning_last_updated_at: Optional[str] = None
+    active_suppressions: list[dict[str, object]] = Field(default_factory=list)
+    latest_subject_request_id: Optional[str] = None
+    latest_subject_request_type: Optional[str] = None
+    latest_subject_request_status: Optional[str] = None
+    latest_subject_request_updated_at: Optional[str] = None
+    subject_request_summaries: list[dict[str, object]] = Field(default_factory=list)
+    retention_status: Optional[str] = None
+    retention_last_reviewed_at: Optional[str] = None
+    retention_notes: list[str] = Field(default_factory=list)
 
     enrichment_status: Optional[str] = None
     enrichment_source: Optional[str] = None

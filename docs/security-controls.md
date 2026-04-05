@@ -1,103 +1,87 @@
 # Security Controls
 
-This document describes the current security posture of the repository and runtime.
-It is intentionally split between controls that are implemented today and controls
-that are planned for later phases.
-
-This project should be described as privacy-aware and GDPR-aware, not as
-"GDPR compliant." Real deployment still requires legal, privacy, and security review.
+This document describes the security and privacy controls implemented in code
+today, plus controls that are still planned. It is intentionally conservative.
+The project is privacy-aware and GDPR-aware, not represented as "GDPR compliant."
 
 ## Implemented Today
 
-### Authentication and Authorization
+### Authentication and authorization
 
-- Sensitive non-dev API write endpoints can be gated by a shared `ADMIN_API_KEY`.
-- Candidate ingress uses HMAC request signing outside `ENV=dev`.
-- The server-rendered operator UI does not yet implement user authentication,
-  sessions, or RBAC.
-- Approval and send actions are tracked with actor fields where the workflow
-  captures them, but actor identity is not yet backed by authenticated sessions.
+- Non-dev admin/API write routes can require `ADMIN_API_KEY`.
+- Candidate ingress uses HMAC validation outside `ENV=dev`.
+- The UI is still an internal/demo operator surface. It does not yet have user
+  authentication, sessions, or RBAC.
+- Actor fields are captured on approvals, subject-request updates, and manual
+  suppressions when the caller provides them.
 
-### Audit and Traceability
+### Auditability and replay
 
-- Business workflow state changes are written to an append-only event ledger.
-- Events include `correlation_id`, `entity_id`, timestamps, and structured payloads.
-- Approval and rejection events include actor and reason fields.
-- Logs are structured JSON and include `correlation_id` when provided.
-- Lightweight tracing can attach runtime trace/span IDs to logs when enabled.
+- Business state changes are written to an append-only ledger.
+- Workflow runners remain deterministic and replay-safe through stable event IDs.
+- Approval, suppression, redaction, retention review, reply triage, provider
+  send, and learning actions all remain additive events.
+- Export generation is an internal/admin action with its own audit event.
 
-### Idempotency and Duplicate Protection
+### Idempotency and duplicate protection
 
-- Mutating workflow events use deterministic event IDs.
-- Phase runners are safe to re-run and skip duplicate event emission.
-- Irreversible outbound sends are gated by approval, policy checks, provider
-  lifecycle events, and duplicate detection.
-- Queue-backed execution reuses the same deterministic runners rather than
-  introducing a separate non-idempotent code path.
+- Runners skip duplicate event emission when the same unit of work is re-run.
+- Irreversible sends are still gated by approval, policy checks, provider-send
+  lifecycle events, and already-sent protection.
+- Suppression records and subject-request status updates use deterministic event
+  IDs so repeated requests do not multiply state transitions.
 
-### Direct Marketing Controls
+### Direct-marketing and data-control enforcement
 
-- Config-based suppression exists through `SUPPRESSED_ENTITIES` and `SUPPRESSED_DOMAINS`.
-- Reply triage records `unsubscribe_recorded`.
-- Unsubscribe now sets an explicit marketing-suppressed state in projections and
-  blocks future send attempts through policy evaluation.
+- Config-based suppression still exists for simple local overrides.
+- First-class suppression records now exist for `entity`, `domain`, and `email`
+  targets with reasons such as `unsubscribe`, `manual_suppression`,
+  `objection_to_marketing`, and `compliance_hold`.
+- Reply-triage unsubscribe handling records both `unsubscribe_recorded` and a
+  first-class suppression record.
+- Subject requests are explicit workflow state, including
+  `objection_to_marketing`, `erasure`, `access_export`, and `rectification`.
+- Approved/completed objection-to-marketing requests automatically create a
+  suppression record that blocks future outreach.
 
-### Secret Handling
+### Redaction and retention
 
-- `.env` files are ignored by git.
-- `.env.example` is sanitized and intended only as a local template.
-- Runtime secrets are expected through environment variables.
-- The repo avoids committing live API keys or provider credentials.
+- Historical ledger events are not mutated in place.
+- Reply-text minimisation is implemented through additive
+  `retention_reviewed` and `data_redaction_applied` events.
+- Entity projections, sanitized timelines, and export summaries prefer the
+  redacted overlay rather than exposing prior raw reply text.
+- `REPLY_TEXT_RETENTION_DAYS` and `REDACTION_PLACEHOLDER` are configurable for
+  local/runtime behavior.
 
-### Supply Chain and Build Posture
+### Secrets and operational hygiene
 
-- GitHub Actions run tests on pull requests and main-branch changes.
-- A dedicated security workflow runs `bandit` and `pip-audit`.
-- Docker runs the app as a non-root user.
-- Dependency versions are pinned in `requirements.txt`.
+- `.env` is ignored by git and `.env.example` is sanitized.
+- Runtime secrets are expected from environment variables or local developer
+  env files, not committed source.
+- Local runtime artifacts such as `data/ledger.jsonl`, caches, and traces are
+  treated as runtime data rather than source code.
 
-### Runtime and Infrastructure Posture
+### Supply-chain and runtime posture
 
-- The app defaults to local development mode unless configured otherwise.
-- Docker Compose is intended for local developer use and does not represent a hardened deployment boundary.
-- PostgreSQL and Redis are isolated to local-compose networking in the demo setup.
-- The append-only ledger model supports replay and integrity-oriented verification in file mode.
+- CI runs tests and security checks (`bandit`, `pip-audit`).
+- Dependencies are pinned in `requirements.txt`.
+- The queue/worker model reuses the same business runners instead of introducing
+  a separate non-audited execution path.
+- Lightweight tracing is optional and local-safe.
 
 ## Planned Controls
 
-### Authentication and Authorization
+- Real authentication, sessions, and RBAC for operator/admin actions
+- Secret manager / KMS integration and credential rotation
+- Formal backup retention/deletion procedures
+- Broader pseudonymisation beyond reply text
+- Automated lifecycle scheduling beyond the current run-once retention utility
+- Deployment-level hardening, network boundaries, and access review processes
 
-- Identity-backed operator authentication
-- Session management
-- RBAC for reviewer / approver / sender roles
-- UI access controls for administrative actions
+## Honest Boundary
 
-### Secrets and Key Management
-
-- Secret manager or KMS integration
-- Credential rotation procedures
-- Separate credentials by environment
-
-### Platform Hardening
-
-- Network boundary hardening for real deployments
-- Managed TLS termination and secure ingress
-- Stronger backup encryption and restore validation
-- SBOM generation and artifact attestation
-- Dependency update automation
-- Dedicated secret scanning in CI
-
-### Privacy and Governance
-
-- Authenticated audit trails tied to real user identities
-- Formal retention/deletion workflows
-- Access review and incident response processes
-
-## Portfolio / Demo Caveats
-
-- The current UI should be treated as an internal demo/admin surface, not an
-  internet-exposed product.
-- Shared-key admin protection is better than open write access, but it is not a
-  substitute for real authentication and authorization.
-- The event ledger is intentionally durable for replay and audit, which means
-  privacy-sensitive lifecycle controls must be designed carefully before production use.
+- The append-only ledger remains the system of record for replay and audit.
+- This means erasure is currently implemented as operational redaction and
+  suppression-aware access/export handling, not destructive historical deletion.
+- Real deployments would still need legal, privacy, and security review.

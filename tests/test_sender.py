@@ -1,5 +1,7 @@
 from supply_program_engine import ledger
 from supply_program_engine.config import settings
+from supply_program_engine.data_controls.models import SuppressionRecord
+from supply_program_engine.data_controls.suppression import record_suppression
 from supply_program_engine.models import EventType
 from supply_program_engine.outbound.sender import run_once
 
@@ -277,3 +279,32 @@ def test_sender_blocks_unsubscribed_entities_from_future_outreach(tmp_path, monk
     blocked = [e for e in ledger.read() if e.get("event_type") == EventType.OUTBOUND_SEND_BLOCKED.value]
     assert len(blocked) == 1
     assert blocked[0]["payload"]["blocked_reasons"] == ["marketing_suppressed:unsubscribe"]
+
+
+def test_sender_blocks_first_class_suppression_registry_records(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "LEDGER_PATH", str(tmp_path / "ledger.jsonl"))
+    monkeypatch.setattr(settings, "LEDGER_BACKEND", "file")
+
+    _append_candidate("entity-suppression", "https://acme-panels.example")
+    _append_draft("entity-suppression", draft_id="draft-suppression")
+    _append_outbox_ready("entity-suppression", draft_id="draft-suppression")
+    record_suppression(
+        SuppressionRecord(
+            target_type="entity",
+            target_value="entity-suppression",
+            reason="manual_suppression",
+            entity_id="entity-suppression",
+            actor="ops@example.internal",
+            source="internal_admin",
+        ),
+        correlation_id="c1",
+    )
+
+    result = run_once(limit=10)
+
+    assert result["emitted"] == 0
+    assert result["blocked"] == 1
+
+    blocked = [e for e in ledger.read() if e.get("event_type") == EventType.OUTBOUND_SEND_BLOCKED.value]
+    assert len(blocked) == 1
+    assert blocked[0]["payload"]["blocked_reasons"] == ["suppression:entity:manual_suppression"]

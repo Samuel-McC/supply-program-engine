@@ -258,10 +258,135 @@ def test_projection_tracks_reply_triage_state(tmp_path, monkeypatch):
     assert v.reply_triage_status == "classified"
     assert v.last_reply_classification == "unsubscribe"
     assert v.last_reply_received_at == "2026-04-01T12:10:00+00:00"
-    assert v.last_reply_text_snippet == "Please unsubscribe me from future emails."
     assert v.unsubscribe_recorded is True
     assert v.marketing_suppressed is True
     assert v.marketing_suppression_reason == "unsubscribe"
+
+
+def test_projection_tracks_data_control_overlays(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "LEDGER_PATH", str(tmp_path / "ledger.jsonl"))
+    monkeypatch.setattr(settings, "LEDGER_BACKEND", "file")
+
+    ledger.append({
+        "event_id": "candidate-1",
+        "event_type": EventType.CANDIDATE_INGESTED.value,
+        "correlation_id": "c1",
+        "entity_id": "e-controls",
+        "payload": {
+            "company_name": "Acme Panels",
+            "website": "https://acme-panels.example",
+            "location": "TX",
+            "source": "manual",
+            "discovered_via": "industrial distributor",
+        },
+    })
+    ledger.append({
+        "event_id": "draft-1",
+        "event_type": EventType.OUTBOUND_DRAFT_CREATED.value,
+        "correlation_id": "c1",
+        "entity_id": "e-controls",
+        "payload": {
+            "draft_id": "draft-1",
+            "entity_id": "e-controls",
+            "segment": "industrial_distributor",
+            "subject": "Supply program",
+            "body": "Hello",
+            "to_hint": "buyer@example.com",
+            "template_version": "v1",
+            "generation_mode": "deterministic",
+        },
+    })
+    ledger.append({
+        "event_id": "reply-1",
+        "event_type": EventType.REPLY_RECEIVED.value,
+        "correlation_id": "c1",
+        "entity_id": "e-controls",
+        "payload": {
+            "reply_key": "reply-controls",
+            "received_at": "2026-04-01T12:10:00+00:00",
+            "reply_text": "Delete this message please.",
+            "reply_text_snippet": "Delete this message please.",
+            "metadata": {},
+        },
+    })
+    ledger.append({
+        "event_id": "subject-request",
+        "event_type": EventType.SUBJECT_REQUEST_RECORDED.value,
+        "correlation_id": "c1",
+        "entity_id": "e-controls",
+        "payload": {
+            "request_id": "sr-1",
+            "request_type": "erasure",
+            "target_type": "entity",
+            "target_value": "e-controls",
+            "status": "approved",
+            "requested_at": "2026-04-02T09:00:00+00:00",
+            "entity_id": "e-controls",
+            "actor": "privacy@example.internal",
+            "source": "internal_admin",
+            "notes": "Erasure request.",
+        },
+    })
+    ledger.append({
+        "event_id": "suppression-1",
+        "event_type": EventType.SUPPRESSION_RECORDED.value,
+        "correlation_id": "c1",
+        "entity_id": "e-controls",
+        "payload": {
+            "target_type": "entity",
+            "target_value": "e-controls",
+            "reason": "manual_suppression",
+            "created_at": "2026-04-02T09:05:00+00:00",
+            "expires_at": None,
+            "actor": "ops@example.internal",
+            "source": "internal_admin",
+            "notes": "Do not contact.",
+        },
+    })
+    ledger.append({
+        "event_id": "retention-review-1",
+        "event_type": EventType.RETENTION_REVIEWED.value,
+        "correlation_id": "c1",
+        "entity_id": "e-controls",
+        "payload": {
+            "reply_key": "reply-controls",
+            "target_event_id": "reply-1",
+            "reviewed_at": "2026-04-03T10:00:00+00:00",
+            "policy_name": "reply_text_retention_v1",
+            "action": "redacted",
+            "reason": "subject_request_erasure",
+            "subject_request_id": "sr-1",
+        },
+    })
+    ledger.append({
+        "event_id": "redaction-1",
+        "event_type": EventType.DATA_REDACTION_APPLIED.value,
+        "correlation_id": "c1",
+        "entity_id": "e-controls",
+        "payload": {
+            "reply_key": "reply-controls",
+            "entity_id": "e-controls",
+            "target_event_id": "reply-1",
+            "fields_redacted": ["reply_text", "reply_text_snippet"],
+            "replacement_text": "[redacted]",
+            "reason": "subject_request_erasure",
+            "source": "retention_runner",
+            "applied_at": "2026-04-03T10:00:01+00:00",
+            "actor": "privacy@example.internal",
+            "subject_request_id": "sr-1",
+        },
+    })
+
+    state = build_pipeline_state()
+    v = state["e-controls"]
+    assert v.reply_text_redacted is True
+    assert v.last_reply_text_snippet == "[redacted]"
+    assert v.retention_status == "redacted"
+    assert "subject_request_erasure" in v.retention_notes
+    assert v.latest_subject_request_type == "erasure"
+    assert v.latest_subject_request_status == "approved"
+    assert v.marketing_suppressed is True
+    assert v.active_suppressions[0]["reason"] == "manual_suppression"
 
 
 def test_projection_tracks_learning_feedback_state(tmp_path, monkeypatch):

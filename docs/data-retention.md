@@ -1,141 +1,144 @@
 # Data Retention
 
-This document describes the current retention posture of the project.
-It is an honest description of the present system, not a claim of completed
-production-grade lifecycle management.
+This document describes the current retention posture honestly. It explains
+what the code does today and what still remains planned.
 
 ## Retention Principles
 
-- keep only data needed for workflow execution and audit
-- prefer structured derived signals over raw scraped content
-- treat local demo/runtime data differently from source-controlled fixtures
-- keep secrets out of source control
-- separate implemented retention behavior from planned automation
+- keep append-only workflow history for replay and audit
+- minimise sensitive raw content where practical
+- prefer additive redaction over silent mutation
+- keep runtime artifacts and secrets out of source control
+- separate implemented controls from planned lifecycle automation
 
-## Data Classes and Current Posture
+## Data Classes and Current Behavior
 
 ### Event ledger
 
 Examples:
 
-- candidate ingest events
-- qualification and compliance outputs
-- drafts, approvals, provider send lifecycle events
-- reply triage events
+- candidate ingress events
+- qualification, drafts, approvals, and sends
+- suppression and subject-request workflow events
+- reply triage, retention review, and redaction events
 - learning feedback events
 
 Current posture:
 
 - retained indefinitely by default
 - append-only by design
-- used for replay, audit, and deterministic state reconstruction
+- source of truth for replay and audit
 
 Implication:
 
-- no automated deletion job exists today
-- deletion requests require careful treatment because the ledger is the audit system of record
+- destructive deletion of historical ledger records is not implemented
+- privacy-sensitive lifecycle handling is additive and overlay-based
 
-### Logs and traces
+### Reply text and user-provided content
 
 Examples:
 
-- structured application logs
-- optional local console traces
+- inbound reply text
+- reply text snippets
+- operator-provided request notes
 
 Current posture:
 
-- not managed by a repository retention job
-- local console tracing is ephemeral unless the operator redirects output elsewhere
-- should avoid secrets and unnecessary personal data where possible
+- reply text is treated as retention-sensitive
+- retention review can mark reply content for redaction
+- approved/completed erasure handling can trigger reply-text redaction
+- redaction replaces reply text/snippets in projected views, sanitized timelines,
+  and internal exports using `REDACTION_PLACEHOLDER`
+
+Current limitation:
+
+- raw historical reply text still remains in the append-only ledger
+- broader pseudonymisation coverage is not yet implemented
+
+### Logs and traces
+
+Current posture:
+
+- not managed by an in-repo retention scheduler
+- local traces are optional and usually ephemeral
+- logs/traces should avoid secrets and unnecessary personal data
 
 ### Secrets and config
-
-Examples:
-
-- `.env`
-- provider API keys
-- admin API keys
 
 Current posture:
 
 - `.env` is ignored by git
-- `.env.example` is the only tracked example
-- secrets are expected through environment variables
+- `.env.example` is sanitized
 - no automated secret rotation or expiry enforcement exists in-repo
 
-### Demo and local runtime data
+### Demo/runtime data
 
 Examples:
 
 - `data/ledger.jsonl`
-- local exports, traces, tree dumps
-- demo-seed output in local developer environments
+- local exports and traces
+- caches and generated artifacts
 
 Current posture:
 
-- treated as local runtime data, not source code
-- ignored through repo hygiene rules
-- can be reset manually by deleting local runtime files or recreating the local database
+- treated as runtime data, not source code
+- expected to be managed locally or by deployment tooling
 
-### Backups and recovery
-
-Current posture:
-
-- backup scheduling and retention are not automated by this repo
-- PostgreSQL/Redis persistence strategy depends on deployment choices outside the app code
-- recovery expectations must be defined by the deployment environment
-
-## Data Subject Rights Posture
+## Subject-Rights and Retention Posture
 
 ### Direct marketing objection
 
 Implemented today:
 
-- unsubscribe is recorded through reply triage
-- unsubscribe projects into marketing suppression
-- future sends are blocked by policy
+- unsubscribe and objection-to-marketing requests can create first-class suppression records
+- future outreach is blocked through sender policy evaluation
 
-### Erasure / deletion request
-
-Implemented today:
-
-- no automated deletion pipeline
-
-Planned posture:
-
-- keep limited audit history where legally required
-- pseudonymise or redact operationally unnecessary personal fields where possible
-- remove or redact auxiliary stores, exports, and caches before touching core audit history
-- define backup handling and restore-window expectations explicitly
-
-### Access / export request
+### Erasure
 
 Implemented today:
 
-- event history can be queried by entity for internal review
+- erasure requests are explicit workflow state
+- approved/completed erasure can trigger reply-text redaction through the
+  retention runner
+- projected state, exports, and entity timelines prefer the redacted view
 
-Planned posture:
+Not implemented today:
 
-- formal export tooling with authenticated requester validation
+- destructive deletion of core ledger history
+- backup purge workflows
+- broad field-by-field redaction beyond the current reply-text focus
 
-### Correction / rectification
+### Access / export
 
 Implemented today:
 
-- no dedicated rectification workflow
-- corrections would currently be represented by additional append-only events rather than silent edits
+- internal/admin export can return projected entity state, sanitized event
+  summary, suppression state, and subject-request state
+
+Not implemented today:
+
+- requester authentication portal
+- delivery workflow for external data-subject requests
+
+### Rectification
+
+Implemented today:
+
+- rectification requests can be tracked as explicit workflow state
+
+Not implemented today:
+
+- automated correction propagation or operator review tooling
 
 ## Planned Automation
 
-Not yet implemented:
+- scheduled retention jobs beyond the current run-once utility
+- broader pseudonymisation/redaction coverage
+- backup retention and deletion controls
+- authenticated access/export workflows
 
-- retention windows enforced by scheduled jobs
-- automated draft expiry
-- automated pseudonymisation
-- backup retention/deletion workflows
-- authenticated subject-rights request handling
+## Honest Boundary
 
-## Legal Review Boundary
-
-This system is privacy-aware and data-minimisation-aware, but production retention
-and deletion posture still requires legal and security review for the target jurisdiction.
+The current system implements privacy-aware suppression, redaction, and export
+behavior, but it does not implement full deletion semantics for an append-only
+audit ledger. Real deployment still requires legal and security review.

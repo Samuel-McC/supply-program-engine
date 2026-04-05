@@ -1,143 +1,129 @@
 # Threat Model
 
-This document captures the main trust boundaries, abuse cases, implemented
-mitigations, and known gaps for the current system.
+This document captures the main assets, trust boundaries, implemented
+mitigations, and current gaps in the platform.
 
 ## Primary Assets
 
 - outbound messaging capability
 - append-only event ledger
-- approval decisions and actor-supplied reasons
+- suppression and subject-rights workflow state
+- reply text and operator-provided notes
 - provider credentials and admin API keys
-- reply text and provider metadata
-- projected entity state used by operators
+- projected entity state and internal export summaries
 
 ## Trust Boundaries
 
 1. External caller -> API ingress
 2. Operator browser -> server-rendered admin UI
-3. Application -> PostgreSQL / file ledger
-4. Application -> Redis queue
+3. Application -> file ledger / database ledger
+4. Application -> Redis queue / worker runtime
 5. Application -> outbound email provider
-6. Application -> local logs and tracing output
+6. Application -> local logs/traces/runtime artifacts
 
 ## Main Threats and Current Mitigations
 
 ### Unauthorized administrative actions
 
 Threat:
-approval, send, queue, or replay actions are triggered by an unauthorized party.
+an unauthorized caller triggers approvals, sends, suppressions, redactions, or export actions.
 
 Implemented today:
 
-- non-dev admin API endpoints require `ADMIN_API_KEY`
-- HMAC protection exists for candidate ingress outside dev
-- approval and send actions create auditable events
+- non-dev admin/API write routes can require `ADMIN_API_KEY`
+- candidate ingress uses HMAC validation outside dev
+- administrative state changes are written to the append-only ledger
 
 Residual risk:
 
-- the UI does not yet enforce authentication or role checks
-- shared-key admin protection is not equivalent to user-level authorization
+- the operator UI does not yet enforce authentication or RBAC
+- shared-key admin protection is weaker than user-scoped authorization
 
 ### Duplicate or repeated outbound sending
 
 Threat:
-retries, race conditions, or worker replays trigger extra sends.
+retries, queue replays, or operator mistakes produce multiple sends.
 
 Implemented today:
 
 - deterministic event IDs
-- replay-safe phase runners
+- provider send lifecycle events
 - already-sent protection
-- policy gate before irreversible sends
-- provider lifecycle events before final `outbound_sent`
+- first-class suppression enforcement in the sender policy path
+- queue workers reuse the same deterministic runners
 
 Residual risk:
 
-- concurrency control is still application-level rather than backed by formal distributed locks
+- concurrency control is still application-level rather than based on distributed locks
 
 ### Direct-marketing objection not being enforced
 
 Threat:
-an unsubscribe or objection is recorded but future outreach still occurs.
+an unsubscribe, objection, or manual suppression is recorded but a later send still goes out.
 
 Implemented today:
 
-- reply triage records `unsubscribe_recorded`
-- unsubscribe projects into explicit marketing suppression state
-- policy blocks future send attempts for suppressed entities/domains and unsubscribe-derived suppression
+- first-class suppression records for entity/domain/email targets
+- reply-triage unsubscribe creates a suppression record
+- approved/completed objection-to-marketing requests create a suppression record
+- sender policy consults both config suppression and the suppression registry
 
 Residual risk:
 
-- dedicated operator-managed suppression workflows are still planned rather than implemented
+- there is not yet authenticated operator identity or approval routing around suppression changes
+
+### Privacy-sensitive reply content persisting too broadly
+
+Threat:
+reply text remains visible longer than necessary in operator views or exports.
+
+Implemented today:
+
+- reply text is identified as retention-sensitive
+- retention review emits additive events
+- redaction is applied as an overlay event, not a hidden mutation
+- entity timelines and export summaries use sanitized payloads after redaction
+
+Residual risk:
+
+- raw historical reply text still exists in the append-only ledger
+- only reply text/snippets have code-first redaction today; broader field coverage is still planned
 
 ### Ledger tampering or inconsistent replay
 
 Threat:
-historical workflow evidence is altered or replay becomes unreliable.
+historical evidence is altered or replay becomes unreliable.
 
 Implemented today:
 
-- append-only event ledger
+- append-only event history
 - deterministic event generation
-- hash-chain verification for file-backed ledger mode
+- file-mode hash-chain verification
 
 Residual risk:
 
-- immutable storage controls, backup integrity validation, and formal change-management procedures are not yet implemented
+- immutable storage controls and backup integrity guarantees are not yet implemented
 
 ### Secret leakage
 
 Threat:
-credentials are committed to the repo, exposed in logs, or copied into demo artifacts.
+credentials leak into source control, logs, or runtime exports.
 
 Implemented today:
 
 - `.env` ignored by git
 - `.env.example` sanitized
-- structured logs emphasize IDs over full payload logging
+- logs emphasize IDs/metadata instead of dumping full payloads by default
+- exports are internal/admin only and structured
 
 Residual risk:
 
-- no secret manager / KMS integration yet
-- local developer handling of `.env` files still depends on process discipline
+- no KMS/secret-manager integration yet
+- local developer handling of env files and console output still matters
 
-### Supply chain compromise
+## Demo vs Operational Boundary
 
-Threat:
-malicious dependency or vulnerable package enters the build.
-
-Implemented today:
-
-- CI runs `bandit`
-- CI runs `pip-audit`
-- dependency versions are pinned in `requirements.txt`
-
-Residual risk:
-
-- no SBOM generation
-- no automated provenance/attestation pipeline
-- no dedicated secret-scanning workflow yet
-
-### Privacy and data rights mismatch
-
-Threat:
-the append-only audit model conflicts with deletion expectations or stores more personal data than needed.
-
-Implemented today:
-
-- deterministic workflow stores structured signals instead of raw enrichment blobs
-- unsubscribe-driven suppression exists
-- documentation now distinguishes suppression from deletion
-
-Residual risk:
-
-- no automated erasure, pseudonymisation, or retention jobs yet
-- reply text currently lives in the ledger when ingested
-- legal review is still required for real deployments
-
-## Demo vs Operational Risk
-
-- Demo seed data is intended for local walkthroughs and should not be mixed with operational data.
-- Local `data/ledger.jsonl`, logs, traces, and `.env` files are runtime artifacts, not source code.
-- The current platform is suitable for portfolio demonstration and internal prototyping, not production internet exposure without additional controls.
+- The platform is suitable for portfolio demonstration and internal prototyping.
+- It is not yet a production-ready, internet-exposed admin system.
+- Legal review would still be required before representing the current
+  redaction/suppression/export posture as sufficient for regulated deployment.

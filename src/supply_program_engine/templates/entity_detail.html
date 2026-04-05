@@ -388,6 +388,80 @@
         </div>
 
         <div class="bg-white rounded-xl shadow-sm border p-6">
+            <h3 class="text-lg font-semibold text-slate-900 mb-4">Data Controls</h3>
+
+            <div class="grid grid-cols-1 gap-4">
+                <div class="rounded-lg border bg-slate-50 p-4">
+                    <div class="text-xs uppercase tracking-wide text-slate-500">Suppression State</div>
+                    <div class="mt-1 font-medium text-slate-900">
+                        {% if entity.active_suppressions or entity.marketing_suppressed %}
+                            suppressed
+                        {% else %}
+                            active
+                        {% endif %}
+                    </div>
+                    <div class="mt-1 text-sm text-slate-600">{{ entity.marketing_suppression_reason or "No active marketing block recorded." }}</div>
+                </div>
+
+                <div class="rounded-lg border bg-slate-50 p-4">
+                    <div class="text-xs uppercase tracking-wide text-slate-500">Reply Text Redaction</div>
+                    <div class="mt-1 font-medium text-slate-900">
+                        {% if entity.reply_text_redacted %}
+                            applied
+                        {% else %}
+                            not applied
+                        {% endif %}
+                    </div>
+                    <div class="mt-1 text-sm text-slate-600">Reviewed: {{ entity.retention_last_reviewed_at or "N/A" }}</div>
+                </div>
+
+                <div class="rounded-lg border bg-slate-50 p-4">
+                    <div class="text-xs uppercase tracking-wide text-slate-500">Latest Subject Request</div>
+                    <div class="mt-1 font-medium text-slate-900">
+                        {{ entity.latest_subject_request_type or "N/A" }}
+                        {% if entity.latest_subject_request_status %}
+                            / {{ entity.latest_subject_request_status }}
+                        {% endif %}
+                    </div>
+                    <div class="mt-1 text-sm text-slate-600">Updated: {{ entity.latest_subject_request_updated_at or "N/A" }}</div>
+                </div>
+
+                {% if entity.active_suppressions %}
+                <div class="rounded-lg border bg-slate-50 p-4">
+                    <div class="text-xs uppercase tracking-wide text-slate-500">Active Suppressions</div>
+                    <ul class="mt-2 space-y-1 text-sm text-slate-700">
+                        {% for suppression in entity.active_suppressions %}
+                        <li>{{ suppression.target_type }} / {{ suppression.reason }} / {{ suppression.source or "unknown" }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+
+                {% if entity.subject_request_summaries %}
+                <div class="rounded-lg border bg-slate-50 p-4">
+                    <div class="text-xs uppercase tracking-wide text-slate-500">Subject Requests</div>
+                    <ul class="mt-2 space-y-1 text-sm text-slate-700">
+                        {% for request in entity.subject_request_summaries %}
+                        <li>{{ request.request_type }} / {{ request.status }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+
+                {% if entity.retention_notes %}
+                <div class="rounded-lg border bg-slate-50 p-4">
+                    <div class="text-xs uppercase tracking-wide text-slate-500">Retention Notes</div>
+                    <ul class="mt-2 space-y-1 text-sm text-slate-700">
+                        {% for note in entity.retention_notes %}
+                        <li>{{ note }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border p-6">
             <h3 class="text-lg font-semibold text-slate-900 mb-4">Operator Actions</h3>
 
             {% if entity.draft_id and entity.status in ["draft_created", "rejected"] %}

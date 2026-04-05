@@ -5,6 +5,7 @@ from urllib.parse import urlparse
 
 from supply_program_engine import ledger
 from supply_program_engine.config import settings
+from supply_program_engine.data_controls.suppression import active_suppressions_for_entity
 from supply_program_engine.models import EventType, PipelineEntityView
 
 
@@ -75,7 +76,27 @@ def evaluate_send_policy(entity_id: str, entity: PipelineEntityView) -> PolicyDe
     if domain and domain in rules.suppressed_domains:
         blocked_reasons.append(f"domain_suppressed:{domain}")
 
-    if entity.marketing_suppressed or entity.unsubscribe_recorded:
+    registry_reasons: list[str] = []
+    for suppression in active_suppressions_for_entity(entity):
+        if suppression.get("source") == "config":
+            continue
+        target_type = _normalize(str(suppression.get("target_type")))
+        reason = _normalize(str(suppression.get("reason")))
+        if not target_type or not reason:
+            continue
+        candidate = f"suppression:{target_type}:{reason}"
+        if candidate not in registry_reasons:
+            registry_reasons.append(candidate)
+    blocked_reasons.extend(registry_reasons)
+
+    has_explicit_suppression = bool(
+        registry_reasons
+        or normalized_entity_id in rules.suppressed_entities
+        or normalized_company_name in rules.suppressed_entities
+        or (domain and domain in rules.suppressed_domains)
+    )
+
+    if (entity.marketing_suppressed or entity.unsubscribe_recorded) and not has_explicit_suppression:
         blocked_reasons.append(
             f"marketing_suppressed:{entity.marketing_suppression_reason or 'direct_marketing_objected'}"
         )

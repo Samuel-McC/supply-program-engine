@@ -140,6 +140,7 @@ def test_reply_triage_ingests_unsubscribe_reply_by_provider_message_id(tmp_path,
 
     events = list(ledger.read())
     assert len([e for e in events if e.get("event_type") == EventType.UNSUBSCRIBE_RECORDED.value]) == 1
+    assert len([e for e in events if e.get("event_type") == EventType.SUPPRESSION_RECORDED.value]) == 1
 
 
 def test_reply_triage_classifies_unknown_without_derived_event(tmp_path, monkeypatch):
