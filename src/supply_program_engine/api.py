@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from dataclasses import asdict, dataclass
 import hashlib
 import hmac
 import json
@@ -18,10 +19,16 @@ from fastapi.responses import RedirectResponse
 from supply_program_engine import ledger
 from supply_program_engine.auth import (
     authenticate_operator,
+    can_approve,
+    can_manage_data_controls,
+    can_review,
+    can_run_admin_actions,
+    can_send,
     clear_session_cookie,
     create_session_principal,
     issue_csrf_token,
     load_session_from_request,
+    permission_context,
     set_session_cookie,
     verify_csrf_token,
 )
@@ -60,8 +67,16 @@ log = get_logger("supply_program_engine")
 templates = Jinja2Templates(directory="src/supply_program_engine/templates")
 
 
+@dataclass(frozen=True)
+class _AuthorizedActor:
+    username: str
+    roles: tuple[str, ...]
+    auth_method: str
+
+
 def _template_response(request: Request, name: str, **context: object) -> HTMLResponse:
     operator = getattr(request.state, "operator", None)
+    permissions = asdict(permission_context(operator))
     return templates.TemplateResponse(
         request,
         name,
@@ -69,9 +84,7 @@ def _template_response(request: Request, name: str, **context: object) -> HTMLRe
             "request": request,
             "current_operator": operator,
             "csrf_token": issue_csrf_token(operator) if operator else None,
-            "operator_can_approve": bool(operator and operator.has_any_role("approver")),
-            "operator_can_send": bool(operator and operator.has_any_role("sender")),
-            "operator_is_admin": bool(operator and operator.has_any_role("admin")),
+            **permissions,
             **context,
         },
     )
@@ -82,19 +95,9 @@ def _compute_signature(raw_body: bytes) -> str:
     return hmac.new(secret, raw_body, hashlib.sha256).hexdigest()
 
 
-def _require_admin_api_key(x_admin_api_key: Optional[str]) -> None:
-    if settings.ENV == "dev":
-        return
-
+def _has_valid_admin_api_key(x_admin_api_key: Optional[str]) -> bool:
     expected = settings.ADMIN_API_KEY
-    if not expected:
-        raise HTTPException(status_code=500, detail="ADMIN_API_KEY is not configured")
-
-    if not x_admin_api_key:
-        raise HTTPException(status_code=401, detail="Missing X-Admin-API-Key")
-
-    if not hmac.compare_digest(x_admin_api_key, expected):
-        raise HTTPException(status_code=401, detail="Invalid X-Admin-API-Key")
+    return bool(expected and x_admin_api_key and hmac.compare_digest(x_admin_api_key, expected))
 
 
 def _safe_next_path(path: str | None) -> str:
@@ -109,6 +112,22 @@ def _current_operator(request: Request) -> SessionPrincipal | None:
     return getattr(request.state, "operator", None)
 
 
+def _authorized_session_actor(operator: SessionPrincipal) -> _AuthorizedActor:
+    return _AuthorizedActor(
+        username=operator.username,
+        roles=tuple(operator.roles),
+        auth_method="session",
+    )
+
+
+def _authorized_api_key_actor() -> _AuthorizedActor:
+    return _AuthorizedActor(
+        username="admin_api_key",
+        roles=("admin",),
+        auth_method="api_key",
+    )
+
+
 def _login_redirect(request: Request) -> RedirectResponse:
     next_path = request.url.path
     if request.url.query:
@@ -117,22 +136,45 @@ def _login_redirect(request: Request) -> RedirectResponse:
     return RedirectResponse(url=f"/login?next={quote(safe_next, safe='/?=&')}", status_code=303)
 
 
-def _require_ui_operator(request: Request, *roles: str) -> SessionPrincipal | RedirectResponse:
+def _require_ui_operator(request: Request, permission_check=can_review) -> SessionPrincipal | RedirectResponse:
     operator = _current_operator(request)
     if operator is None:
         return _login_redirect(request)
-    if roles and not operator.has_any_role(*roles):
+    if not permission_check(operator):
         raise HTTPException(status_code=403, detail="insufficient_role")
     return operator
 
 
-def _require_json_operator(request: Request, *roles: str) -> SessionPrincipal:
+def _require_json_operator(request: Request, permission_check=can_review) -> SessionPrincipal:
     operator = _current_operator(request)
     if operator is None:
         raise HTTPException(status_code=401, detail="authentication_required")
-    if roles and not operator.has_any_role(*roles):
+    if not permission_check(operator):
         raise HTTPException(status_code=403, detail="insufficient_role")
     return operator
+
+
+def _require_internal_access(
+    request: Request,
+    x_admin_api_key: Optional[str],
+    permission_check=can_run_admin_actions,
+) -> _AuthorizedActor:
+    operator = _current_operator(request)
+    if operator is not None and permission_check(operator):
+        return _authorized_session_actor(operator)
+
+    if _has_valid_admin_api_key(x_admin_api_key):
+        return _authorized_api_key_actor()
+
+    if operator is not None:
+        raise HTTPException(status_code=403, detail="insufficient_role")
+
+    if x_admin_api_key:
+        if not settings.ADMIN_API_KEY:
+            raise HTTPException(status_code=500, detail="ADMIN_API_KEY is not configured")
+        raise HTTPException(status_code=401, detail="Invalid X-Admin-API-Key")
+
+    raise HTTPException(status_code=401, detail="authentication_required")
 
 
 def _require_csrf(request: Request, csrf_token: str) -> SessionPrincipal:
@@ -301,7 +343,7 @@ def create_app() -> FastAPI:
         limit: int = 50,
         x_admin_api_key: Optional[str] = Header(default=None),
     ):
-        _require_admin_api_key(x_admin_api_key)
+        _require_internal_access(request, x_admin_api_key, can_run_admin_actions)
         cid = getattr(request.state, "correlation_id", generate_correlation_id())
         with trace_span("api.orchestrator_run_once", correlation_id=cid, task_type="qualification_run", extra={"limit": limit}):
             result = phase3_run_once(limit=limit)
@@ -314,7 +356,7 @@ def create_app() -> FastAPI:
         limit: int = 50,
         x_admin_api_key: Optional[str] = Header(default=None),
     ):
-        _require_admin_api_key(x_admin_api_key)
+        _require_internal_access(request, x_admin_api_key, can_run_admin_actions)
         cid = getattr(request.state, "correlation_id", generate_correlation_id())
         with trace_span("api.enrichment_run_once", correlation_id=cid, task_type="enrichment_run", extra={"limit": limit}):
             result = enrichment_run_once(limit=limit)
@@ -327,7 +369,7 @@ def create_app() -> FastAPI:
         limit: int = 50,
         x_admin_api_key: Optional[str] = Header(default=None),
     ):
-        _require_admin_api_key(x_admin_api_key)
+        _require_internal_access(request, x_admin_api_key, can_run_admin_actions)
         cid = getattr(request.state, "correlation_id", generate_correlation_id())
         with trace_span("api.outbound_run_once", correlation_id=cid, task_type="outbound_draft_run", extra={"limit": limit}):
             result = outbound_run_once(limit=limit)
@@ -340,10 +382,14 @@ def create_app() -> FastAPI:
         limit: int = 50,
         x_admin_api_key: Optional[str] = Header(default=None),
     ):
-        _require_admin_api_key(x_admin_api_key)
+        actor = _require_internal_access(request, x_admin_api_key, can_run_admin_actions)
         cid = getattr(request.state, "correlation_id", generate_correlation_id())
         with trace_span("api.sender_run_once", correlation_id=cid, task_type="sender_run", extra={"limit": limit}):
-            result = sender_run_once(limit=limit)
+            result = sender_run_once(
+                limit=limit,
+                requested_by=actor.username,
+                requested_by_roles=list(actor.roles),
+            )
         log.info("sender_run_once", extra={"correlation_id": cid, **result})
         return {"correlation_id": cid, **result}
 
@@ -353,7 +399,7 @@ def create_app() -> FastAPI:
         request: Request,
         x_admin_api_key: Optional[str] = Header(default=None),
     ):
-        _require_admin_api_key(x_admin_api_key)
+        _require_internal_access(request, x_admin_api_key, can_run_admin_actions)
         cid = getattr(request.state, "correlation_id", generate_correlation_id())
 
         with trace_span(
@@ -376,7 +422,7 @@ def create_app() -> FastAPI:
         limit: int = 50,
         x_admin_api_key: Optional[str] = Header(default=None),
     ):
-        _require_admin_api_key(x_admin_api_key)
+        _require_internal_access(request, x_admin_api_key, can_run_admin_actions)
         cid = getattr(request.state, "correlation_id", generate_correlation_id())
         with trace_span("api.learning_run_once", correlation_id=cid, task_type="learning_run", extra={"limit": limit}):
             result = learning_run_once(limit=limit)
@@ -389,8 +435,19 @@ def create_app() -> FastAPI:
         request: Request,
         x_admin_api_key: Optional[str] = Header(default=None),
     ):
-        _require_admin_api_key(x_admin_api_key)
+        actor = _require_internal_access(request, x_admin_api_key, can_manage_data_controls)
         cid = getattr(request.state, "correlation_id", generate_correlation_id())
+        if actor.auth_method == "session":
+            suppression = suppression.model_copy(
+                update={"actor": actor.username, "actor_roles": list(actor.roles)}
+            )
+        else:
+            suppression = suppression.model_copy(
+                update={
+                    "actor": suppression.actor or actor.username,
+                    "actor_roles": suppression.actor_roles or list(actor.roles),
+                }
+            )
         with trace_span(
             "api.data_controls.record_suppression",
             correlation_id=cid,
@@ -408,8 +465,19 @@ def create_app() -> FastAPI:
         request: Request,
         x_admin_api_key: Optional[str] = Header(default=None),
     ):
-        _require_admin_api_key(x_admin_api_key)
+        actor = _require_internal_access(request, x_admin_api_key, can_manage_data_controls)
         cid = getattr(request.state, "correlation_id", generate_correlation_id())
+        if actor.auth_method == "session":
+            subject_request = subject_request.model_copy(
+                update={"actor": actor.username, "actor_roles": list(actor.roles)}
+            )
+        else:
+            subject_request = subject_request.model_copy(
+                update={
+                    "actor": subject_request.actor or actor.username,
+                    "actor_roles": subject_request.actor_roles or list(actor.roles),
+                }
+            )
         with trace_span(
             "api.data_controls.create_subject_request",
             correlation_id=cid,
@@ -427,8 +495,17 @@ def create_app() -> FastAPI:
         request: Request,
         x_admin_api_key: Optional[str] = Header(default=None),
     ):
-        _require_admin_api_key(x_admin_api_key)
+        actor = _require_internal_access(request, x_admin_api_key, can_manage_data_controls)
         cid = getattr(request.state, "correlation_id", generate_correlation_id())
+        if actor.auth_method == "session":
+            update = update.model_copy(update={"actor": actor.username, "actor_roles": list(actor.roles)})
+        else:
+            update = update.model_copy(
+                update={
+                    "actor": update.actor or actor.username,
+                    "actor_roles": update.actor_roles or list(actor.roles),
+                }
+            )
         with trace_span(
             "api.data_controls.update_subject_request_status",
             correlation_id=cid,
@@ -448,7 +525,7 @@ def create_app() -> FastAPI:
         limit: int = 50,
         x_admin_api_key: Optional[str] = Header(default=None),
     ):
-        _require_admin_api_key(x_admin_api_key)
+        _require_internal_access(request, x_admin_api_key, can_manage_data_controls)
         cid = getattr(request.state, "correlation_id", generate_correlation_id())
         with trace_span(
             "api.data_controls.retention_run_once",
@@ -466,7 +543,7 @@ def create_app() -> FastAPI:
         request: Request,
         x_admin_api_key: Optional[str] = Header(default=None),
     ):
-        _require_admin_api_key(x_admin_api_key)
+        actor = _require_internal_access(request, x_admin_api_key, can_manage_data_controls)
         cid = getattr(request.state, "correlation_id", generate_correlation_id())
         with trace_span(
             "api.data_controls.export_entity",
@@ -497,6 +574,9 @@ def create_app() -> FastAPI:
                             "generated_at": iso_now(),
                             "subject_request_count": len(export["subject_requests"]),
                             "suppression_count": len(export["suppression_state"]),
+                            "actor": actor.username,
+                            "actor_roles": list(actor.roles),
+                            "auth_method": actor.auth_method,
                         },
                     }
                 )
@@ -509,7 +589,7 @@ def create_app() -> FastAPI:
         request: Request,
         x_admin_api_key: Optional[str] = Header(default=None),
     ):
-        _require_admin_api_key(x_admin_api_key)
+        _require_internal_access(request, x_admin_api_key, can_run_admin_actions)
         cid = getattr(request.state, "correlation_id", generate_correlation_id())
         queued_task = task.model_copy(update={"correlation_id": task.correlation_id or cid})
 
@@ -533,7 +613,7 @@ def create_app() -> FastAPI:
         timeout_seconds: int = 0,
         x_admin_api_key: Optional[str] = Header(default=None),
     ):
-        _require_admin_api_key(x_admin_api_key)
+        _require_internal_access(request, x_admin_api_key, can_run_admin_actions)
         cid = getattr(request.state, "correlation_id", generate_correlation_id())
 
         with trace_span("api.worker_run_once", correlation_id=cid, task_type="worker_run", extra={"timeout_seconds": timeout_seconds}):
@@ -551,11 +631,23 @@ def create_app() -> FastAPI:
         request: Request,
         x_admin_api_key: Optional[str] = Header(default=None),
     ):
-        _require_admin_api_key(x_admin_api_key)
+        actor = _require_internal_access(request, x_admin_api_key, can_approve)
         cid = getattr(request.state, "correlation_id", generate_correlation_id())
 
         if not decision.reason or not decision.reason.strip():
             raise HTTPException(status_code=400, detail="Approval/rejection reason is required")
+
+        if actor.auth_method == "session":
+            decision = decision.model_copy(
+                update={"actor": actor.username, "actor_roles": list(actor.roles)}
+            )
+        else:
+            decision = decision.model_copy(
+                update={
+                    "actor": decision.actor or actor.username,
+                    "actor_roles": decision.actor_roles or list(actor.roles),
+                }
+            )
 
         draft_event = ledger.get(decision.draft_id)
         if not draft_event or draft_event.get("event_type") != EventType.OUTBOUND_DRAFT_CREATED.value:
@@ -715,7 +807,7 @@ def create_app() -> FastAPI:
 
     @app.get("/ui/metrics", response_class=HTMLResponse)
     async def ui_metrics(request: Request):
-        gate = _require_ui_operator(request, "admin")
+        gate = _require_ui_operator(request, can_run_admin_actions)
         if isinstance(gate, RedirectResponse):
             return gate
         events = list(ledger.read())
@@ -743,7 +835,7 @@ def create_app() -> FastAPI:
         reason: str = Form(...),
         csrf_token: str = Form(""),
     ):
-        gate = _require_ui_operator(request, "approver")
+        gate = _require_ui_operator(request, can_approve)
         if isinstance(gate, RedirectResponse):
             return gate
         operator = _require_csrf(request, csrf_token)
@@ -763,6 +855,7 @@ def create_app() -> FastAPI:
             draft_id=entity.draft_id,
             decision="approved",
             actor=operator.username,
+            actor_roles=list(operator.roles),
             reason=reason,
         )
 
@@ -818,7 +911,7 @@ def create_app() -> FastAPI:
         reason: str = Form(...),
         csrf_token: str = Form(""),
     ):
-        gate = _require_ui_operator(request, "approver")
+        gate = _require_ui_operator(request, can_approve)
         if isinstance(gate, RedirectResponse):
             return gate
         operator = _require_csrf(request, csrf_token)
@@ -838,6 +931,7 @@ def create_app() -> FastAPI:
             draft_id=entity.draft_id,
             decision="rejected",
             actor=operator.username,
+            actor_roles=list(operator.roles),
             reason=reason,
         )
 
@@ -870,7 +964,7 @@ def create_app() -> FastAPI:
         entity_id: str,
         csrf_token: str = Form(""),
     ):
-        gate = _require_ui_operator(request, "sender")
+        gate = _require_ui_operator(request, can_send)
         if isinstance(gate, RedirectResponse):
             return gate
         operator = _require_csrf(request, csrf_token)
@@ -883,7 +977,12 @@ def create_app() -> FastAPI:
         if entity.status != "outbox_ready":
             raise HTTPException(status_code=400, detail="Entity is not ready to send")
 
-        sender_run_once(limit=1, entity_id=entity_id, requested_by=operator.username)
+        sender_run_once(
+            limit=1,
+            entity_id=entity_id,
+            requested_by=operator.username,
+            requested_by_roles=list(operator.roles),
+        )
 
         return RedirectResponse(url=f"/ui/entity/{entity_id}", status_code=303)
 

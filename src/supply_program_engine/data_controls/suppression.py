@@ -29,6 +29,7 @@ def record_suppression(record: SuppressionRecord, correlation_id: str) -> dict[s
         "created_at": created_at,
         "expires_at": record.expires_at,
         "actor": record.actor,
+        "actor_roles": record.actor_roles,
         "source": record.source,
         "notes": record.notes,
     }
@@ -41,6 +42,7 @@ def record_suppression(record: SuppressionRecord, correlation_id: str) -> dict[s
                 "reason": record.reason,
                 "expires_at": record.expires_at,
                 "actor": record.actor,
+                "actor_roles": record.actor_roles,
                 "source": record.source,
                 "notes": record.notes,
             },
@@ -78,6 +80,7 @@ def list_suppressions() -> list[dict]:
                 "created_at": payload.get("created_at"),
                 "expires_at": payload.get("expires_at"),
                 "actor": payload.get("actor"),
+                "actor_roles": payload.get("actor_roles") or [],
                 "source": payload.get("source"),
                 "notes": payload.get("notes"),
             }
@@ -124,6 +127,7 @@ def active_suppressions_for_entity(entity: PipelineEntityView) -> list[dict]:
                 "created_at": None,
                 "expires_at": None,
                 "actor": None,
+                "actor_roles": [],
                 "source": "config",
                 "notes": "Configured in SUPPRESSED_ENTITIES",
             }
@@ -140,6 +144,7 @@ def active_suppressions_for_entity(entity: PipelineEntityView) -> list[dict]:
                 "created_at": None,
                 "expires_at": None,
                 "actor": None,
+                "actor_roles": [],
                 "source": "config",
                 "notes": "Configured in SUPPRESSED_DOMAINS",
             }

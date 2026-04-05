@@ -31,6 +31,7 @@ def _client(tmp_path, monkeypatch, *, operator_users_json: str | None = None) ->
     monkeypatch.setattr(settings, "SESSION_SECRET", "test-session-secret")
     monkeypatch.setattr(settings, "SESSION_COOKIE_SECURE", False)
     monkeypatch.setattr(settings, "OPERATOR_USERS_JSON", operator_users_json or "")
+    monkeypatch.setattr(settings, "ADMIN_API_KEY", "test-admin-key")
     monkeypatch.setattr(settings, "OUTBOUND_PROVIDER", "mock")
     monkeypatch.setattr(settings, "OUTBOUND_DRY_RUN", True)
     return TestClient(create_app())
@@ -199,6 +200,7 @@ def test_approval_action_records_authenticated_actor_from_session(tmp_path, monk
     approved_events = [event for event in ledger.read() if event.get("event_type") == EventType.OUTBOUND_APPROVED.value]
     assert len(approved_events) == 1
     assert approved_events[0]["payload"]["actor"] == "approver-1"
+    assert approved_events[0]["payload"]["actor_roles"] == ["approver"]
 
 
 def test_send_action_records_authenticated_actor_from_session(tmp_path, monkeypatch):
@@ -235,8 +237,10 @@ def test_send_action_records_authenticated_actor_from_session(tmp_path, monkeypa
     sent_events = [event for event in ledger.read() if event.get("event_type") == EventType.OUTBOUND_SENT.value]
     assert len(requested_events) == 1
     assert requested_events[0]["payload"]["actor"] == "sender-1"
+    assert requested_events[0]["payload"]["actor_roles"] == ["sender"]
     assert len(sent_events) == 1
     assert sent_events[0]["payload"]["actor"] == "sender-1"
+    assert sent_events[0]["payload"]["actor_roles"] == ["sender"]
 
 
 def test_basic_role_gating_blocks_reviewer_from_admin_and_approver_actions(tmp_path, monkeypatch):
@@ -266,3 +270,109 @@ def test_basic_role_gating_blocks_reviewer_from_admin_and_approver_actions(tmp_p
 
     assert metrics.status_code == 403
     assert approve.status_code == 403
+
+
+def test_reviewer_cannot_send_or_manage_data_controls_by_direct_post(tmp_path, monkeypatch):
+    operator_users = _operator_users_json(
+        {
+            "username": "reviewer-1",
+            "display_name": "Reviewer One",
+            "password": "password-1",
+            "roles": ["reviewer"],
+        }
+    )
+    client = _client(tmp_path, monkeypatch, operator_users_json=operator_users)
+    _seed_candidate()
+    _seed_draft()
+    _seed_outbox_ready()
+
+    login = _login(client, username="reviewer-1", password="password-1", next_path="/ui/entity/entity-1")
+    assert login.status_code == 303
+
+    detail = client.get("/ui/entity/entity-1")
+    csrf_token = _extract_csrf_token(detail.text)
+
+    send = client.post(
+        "/ui/entity/entity-1/send-now",
+        data={"csrf_token": csrf_token},
+        follow_redirects=False,
+    )
+    suppression = client.post(
+        "/data-controls/suppression",
+        json={
+            "target_type": "entity",
+            "target_value": "entity-1",
+            "reason": "manual_suppression",
+            "entity_id": "entity-1",
+            "actor": "reviewer-1",
+        },
+    )
+
+    assert send.status_code == 403
+    assert send.json()["detail"] == "insufficient_role"
+    assert suppression.status_code == 403
+    assert suppression.json()["detail"] == "insufficient_role"
+
+
+def test_admin_session_can_access_data_controls_without_api_key(tmp_path, monkeypatch):
+    operator_users = _operator_users_json(
+        {
+            "username": "admin-1",
+            "display_name": "Admin One",
+            "password": "password-1",
+            "roles": ["admin"],
+        }
+    )
+    client = _client(tmp_path, monkeypatch, operator_users_json=operator_users)
+    _seed_candidate()
+
+    login = _login(client, username="admin-1", password="password-1", next_path="/ui/entity/entity-1")
+    assert login.status_code == 303
+
+    suppression = client.post(
+        "/data-controls/suppression",
+        json={
+            "target_type": "entity",
+            "target_value": "entity-1",
+            "reason": "manual_suppression",
+            "entity_id": "entity-1",
+            "source": "internal_admin",
+            "notes": "Admin session suppression",
+        },
+    )
+
+    assert suppression.status_code == 200
+    assert suppression.json()["status"] == "recorded"
+
+    events = [event for event in ledger.read() if event.get("event_type") == EventType.SUPPRESSION_RECORDED.value]
+    assert len(events) == 1
+    assert events[0]["payload"]["actor"] == "admin-1"
+    assert events[0]["payload"]["actor_roles"] == ["admin"]
+
+
+def test_ui_hides_protected_controls_for_reviewer_role(tmp_path, monkeypatch):
+    operator_users = _operator_users_json(
+        {
+            "username": "reviewer-1",
+            "display_name": "Reviewer One",
+            "password": "password-1",
+            "roles": ["reviewer"],
+        }
+    )
+    client = _client(tmp_path, monkeypatch, operator_users_json=operator_users)
+    _seed_candidate()
+    _seed_draft()
+
+    login = _login(client, username="reviewer-1", password="password-1")
+    assert login.status_code == 303
+
+    candidates = client.get("/ui/candidates")
+    detail = client.get("/ui/entity/entity-1")
+
+    assert candidates.status_code == 200
+    assert 'href="/ui/metrics"' not in candidates.text
+    assert detail.status_code == 200
+    assert "Approve Draft" not in detail.text
+    assert "Reject Draft" not in detail.text
+    assert "Send Now" not in detail.text
+    assert "cannot approve or reject drafts" in detail.text

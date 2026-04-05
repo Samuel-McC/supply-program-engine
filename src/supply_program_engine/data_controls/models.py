@@ -49,6 +49,7 @@ class SuppressionRecord(BaseModel):
     created_at: str | None = None
     expires_at: str | None = None
     actor: str | None = None
+    actor_roles: list[str] = Field(default_factory=list)
     source: str = "internal_admin"
     notes: str | None = None
     entity_id: str | None = None
@@ -63,6 +64,7 @@ class SubjectRequestRecord(BaseModel):
     requested_at: str | None = None
     entity_id: str | None = None
     actor: str | None = None
+    actor_roles: list[str] = Field(default_factory=list)
     source: str = "internal_admin"
     notes: str | None = None
 
@@ -72,6 +74,7 @@ class SubjectRequestStatusUpdate(BaseModel):
     status: SubjectRequestStatus
     updated_at: str | None = None
     actor: str | None = None
+    actor_roles: list[str] = Field(default_factory=list)
     notes: str | None = None
 
 
@@ -85,4 +88,5 @@ class RedactionState(BaseModel):
     source: str
     applied_at: str
     actor: str | None = None
+    actor_roles: list[str] = Field(default_factory=list)
     subject_request_id: str | None = None

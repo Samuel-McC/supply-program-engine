@@ -12,7 +12,12 @@ def _client_with_temp_ledger(tmp_path, monkeypatch) -> TestClient:
     monkeypatch.setattr(settings, "ENV", "dev")
     monkeypatch.setattr(settings, "REPLY_TEXT_RETENTION_DAYS", 30)
     monkeypatch.setattr(settings, "REDACTION_PLACEHOLDER", "[redacted]")
+    monkeypatch.setattr(settings, "ADMIN_API_KEY", "test-admin-key")
     return TestClient(create_app())
+
+
+def _admin_headers() -> dict[str, str]:
+    return {"x-admin-api-key": "test-admin-key"}
 
 
 def _append_candidate(entity_id: str = "entity-1") -> None:
@@ -87,12 +92,13 @@ def test_manual_suppression_is_recorded_and_exported(tmp_path, monkeypatch):
             "source": "internal_admin",
             "notes": "Operator suppression for do-not-contact review.",
         },
+        headers=_admin_headers(),
     )
 
     assert response.status_code == 200
     assert response.json()["status"] == "recorded"
 
-    export = client.get("/data-controls/export/entity/entity-1")
+    export = client.get("/data-controls/export/entity/entity-1", headers=_admin_headers())
     assert export.status_code == 200
     body = export.json()
     assert body["suppression_state"][0]["reason"] == "manual_suppression"
@@ -115,6 +121,7 @@ def test_subject_request_objection_status_update_creates_suppression(tmp_path, m
             "source": "internal_admin",
             "notes": "Marketing objection received by operator.",
         },
+        headers=_admin_headers(),
     )
     assert created.status_code == 200
     request_id = created.json()["request_id"]
@@ -127,6 +134,7 @@ def test_subject_request_objection_status_update_creates_suppression(tmp_path, m
             "actor": "privacy@example.internal",
             "notes": "Approved after review.",
         },
+        headers=_admin_headers(),
     )
     assert updated.status_code == 200
     assert updated.json()["suppression"]["status"] == "recorded"
@@ -154,6 +162,7 @@ def test_erasure_request_and_retention_runner_redact_reply_text_in_export(tmp_pa
             "source": "internal_admin",
             "notes": "Erasure request for reply content.",
         },
+        headers=_admin_headers(),
     )
     request_id = created.json()["request_id"]
     approved = client.post(
@@ -164,14 +173,15 @@ def test_erasure_request_and_retention_runner_redact_reply_text_in_export(tmp_pa
             "actor": "privacy@example.internal",
             "notes": "Approved for redaction workflow.",
         },
+        headers=_admin_headers(),
     )
     assert approved.status_code == 200
 
-    retention = client.post("/data-controls/retention/run-once")
+    retention = client.post("/data-controls/retention/run-once", headers=_admin_headers())
     assert retention.status_code == 200
     assert retention.json()["redacted"] == 1
 
-    export = client.get("/data-controls/export/entity/entity-3")
+    export = client.get("/data-controls/export/entity/entity-3", headers=_admin_headers())
     assert export.status_code == 200
     body = export.json()
     assert body["entity"]["reply_text_redacted"] is True
@@ -195,10 +205,11 @@ def test_export_returns_projected_state_and_subject_requests(tmp_path, monkeypat
             "actor": "ops@example.internal",
             "source": "internal_admin",
         },
+        headers=_admin_headers(),
     )
     assert subject_request.status_code == 200
 
-    response = client.get("/data-controls/export/entity/entity-4")
+    response = client.get("/data-controls/export/entity/entity-4", headers=_admin_headers())
     assert response.status_code == 200
     body = response.json()
     assert body["entity"]["entity_id"] == "entity-4"

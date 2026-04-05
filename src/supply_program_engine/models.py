@@ -96,6 +96,7 @@ class ApprovalDecision(BaseModel):
     draft_id: str
     decision: Literal["approved", "rejected"]
     actor: str
+    actor_roles: list[str] = Field(default_factory=list)
     reason: str
 
 

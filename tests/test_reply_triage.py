@@ -10,7 +10,12 @@ def _client_with_temp_ledger(tmp_path, monkeypatch) -> TestClient:
     monkeypatch.setattr(settings, "LEDGER_PATH", str(tmp_path / "ledger.jsonl"))
     monkeypatch.setattr(settings, "LEDGER_BACKEND", "file")
     monkeypatch.setattr(settings, "ENV", "dev")
+    monkeypatch.setattr(settings, "ADMIN_API_KEY", "test-admin-key")
     return TestClient(create_app())
+
+
+def _admin_headers() -> dict[str, str]:
+    return {"x-admin-api-key": "test-admin-key"}
 
 
 def _append_candidate(entity_id: str) -> None:
@@ -80,6 +85,7 @@ def test_reply_triage_ingests_interested_reply_by_entity_id(tmp_path, monkeypatc
             "reply_text": "Interested. Let's talk pricing next week.",
             "received_at": "2026-04-01T12:05:00+00:00",
         },
+        headers=_admin_headers(),
     )
 
     assert response.status_code == 200
@@ -106,6 +112,7 @@ def test_reply_triage_ingests_not_interested_reply_by_draft_id(tmp_path, monkeyp
             "reply_text": "No thanks, we are not interested right now.",
             "received_at": "2026-04-01T12:06:00+00:00",
         },
+        headers=_admin_headers(),
     )
 
     assert response.status_code == 200
@@ -130,6 +137,7 @@ def test_reply_triage_ingests_unsubscribe_reply_by_provider_message_id(tmp_path,
             "reply_text": "Please unsubscribe me from future emails.",
             "received_at": "2026-04-01T12:07:00+00:00",
         },
+        headers=_admin_headers(),
     )
 
     assert response.status_code == 200
@@ -154,6 +162,7 @@ def test_reply_triage_classifies_unknown_without_derived_event(tmp_path, monkeyp
             "reply_text": "Thanks for the note.",
             "received_at": "2026-04-01T12:08:00+00:00",
         },
+        headers=_admin_headers(),
     )
 
     assert response.status_code == 200
@@ -178,8 +187,8 @@ def test_reply_triage_is_idempotent_for_duplicate_payloads(tmp_path, monkeypatch
         "received_at": "2026-04-01T12:09:00+00:00",
     }
 
-    first = client.post("/reply-triage/ingest", json=payload)
-    second = client.post("/reply-triage/ingest", json=payload)
+    first = client.post("/reply-triage/ingest", json=payload, headers=_admin_headers())
+    second = client.post("/reply-triage/ingest", json=payload, headers=_admin_headers())
 
     assert first.status_code == 200
     assert second.status_code == 200

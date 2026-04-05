@@ -16,6 +16,8 @@ The project is privacy-aware and GDPR-aware, not represented as "GDPR compliant.
 - UI form actions use CSRF tokens tied to the authenticated session.
 - A bounded internal role model now exists for `reviewer`, `approver`,
   `sender`, and `admin`.
+- Authorization is now enforced through explicit RBAC helpers rather than
+  ad hoc inline route checks.
 - Approval and UI-triggered send actions record authenticated actor identity
   from the session.
 - The UI is still an internal/demo operator surface rather than a full
@@ -50,14 +52,24 @@ The project is privacy-aware and GDPR-aware, not represented as "GDPR compliant.
 - Approved/completed objection-to-marketing requests automatically create a
   suppression record that blocks future outreach.
 
-### Operator access controls
+### Operator access controls and RBAC
 
 - UI routes require authenticated operator sessions.
-- `approver`/`admin` roles can approve or reject drafts.
-- `sender`/`admin` roles can trigger UI send actions.
-- `admin` can access the metrics console.
-- Internal run-once, queue, and data-control API routes continue to use the
-  existing admin-key model rather than browser sessions.
+- `reviewer` can access operator views but cannot approve, send, or run admin
+  actions.
+- `approver` can approve or reject drafts but cannot send unless also granted
+  sender/admin access.
+- `sender` can trigger send actions where workflow state and policy allow it,
+  but cannot approve unless also granted approver/admin access.
+- `admin` can access metrics, data controls, queue/worker actions, and other
+  internal operator/admin surfaces.
+- Forbidden UI controls are hidden for operators who do not have the required
+  permission.
+- Direct POST attempts still receive `403` when the operator lacks the
+  required role.
+- Internal run-once, queue, and data-control API routes accept either an
+  authenticated `admin` session or `ADMIN_API_KEY` for non-browser/machine
+  automation.
 
 ### Redaction and retention
 
@@ -87,7 +99,7 @@ The project is privacy-aware and GDPR-aware, not represented as "GDPR compliant.
 
 ## Planned Controls
 
-- Deeper authorization rules beyond the current bounded role gates
+- Deeper enterprise IAM beyond the current bounded internal RBAC layer
 - Secret manager / KMS integration and credential rotation
 - Formal backup retention/deletion procedures
 - Broader pseudonymisation beyond reply text

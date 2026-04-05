@@ -34,12 +34,17 @@ Implemented today:
 - candidate ingress uses HMAC validation outside dev
 - the operator UI now requires authenticated signed sessions
 - authenticated UI form posts require CSRF tokens
-- bounded role gates now protect metrics, approval, and send actions
+- explicit RBAC now protects review, approval, send, data-control, metrics,
+  queue, and worker admin surfaces
+- forbidden controls are hidden in the operator UI, and direct POST attempts
+  still fail with authorization errors
+- non-browser/internal automation can continue using `ADMIN_API_KEY`
 - administrative state changes are written to the append-only ledger
 
 Residual risk:
 
-- deeper authorization/RBAC is still limited to a small role model
+- authorization is still based on a small internal role model rather than
+  enterprise IAM, separation-of-duties policy, or delegated administration
 - shared-key admin protection remains in use for non-UI/internal endpoints
 
 ### Duplicate or repeated outbound sending

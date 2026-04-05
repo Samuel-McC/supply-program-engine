@@ -32,6 +32,7 @@ def create_subject_request(request: SubjectRequestRecord, correlation_id: str) -
         "requested_at": request.requested_at or iso_now(),
         "entity_id": request.entity_id,
         "actor": request.actor,
+        "actor_roles": request.actor_roles,
         "source": request.source,
         "notes": request.notes,
     }
@@ -117,6 +118,7 @@ def update_subject_request_status(update: SubjectRequestStatusUpdate, correlatio
         "status": update.status,
         "updated_at": update.updated_at or iso_now(),
         "actor": update.actor,
+        "actor_roles": update.actor_roles,
         "notes": update.notes,
     }
     event_id = ledger.generate_event_id(
@@ -148,6 +150,7 @@ def update_subject_request_status(update: SubjectRequestStatusUpdate, correlatio
                 target_value=request["target_value"],
                 reason="objection_to_marketing",
                 actor=update.actor,
+                actor_roles=update.actor_roles,
                 source="subject_request",
                 notes=update.notes or request.get("notes"),
                 entity_id=request.get("entity_id"),

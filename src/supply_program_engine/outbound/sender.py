@@ -25,7 +25,13 @@ def _iso_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def run_once(limit: int = 50, *, entity_id: str | None = None, requested_by: str | None = None) -> dict:
+def run_once(
+    limit: int = 50,
+    *,
+    entity_id: str | None = None,
+    requested_by: str | None = None,
+    requested_by_roles: list[str] | None = None,
+) -> dict:
     """
     Provider-backed sender.
 
@@ -44,7 +50,12 @@ def run_once(limit: int = 50, *, entity_id: str | None = None, requested_by: str
     with trace_span(
         "runner.sender.batch",
         task_type="sender_run",
-        extra={"limit": limit, "entity_id": target_entity_id, "requested_by": requested_by},
+        extra={
+            "limit": limit,
+            "entity_id": target_entity_id,
+            "requested_by": requested_by,
+            "requested_by_roles": requested_by_roles or [],
+        },
     ):
         for rec in list(ledger.read()):
             if processed >= limit:
@@ -114,6 +125,7 @@ def run_once(limit: int = 50, *, entity_id: str | None = None, requested_by: str
                                 "blocked_reasons": decision.blocked_reasons,
                                 "policy_version": decision.policy_version,
                                 "actor": requested_by,
+                                "actor_roles": requested_by_roles or [],
                             },
                         }
                     )
@@ -153,6 +165,7 @@ def run_once(limit: int = 50, *, entity_id: str | None = None, requested_by: str
                                 "requested_at": requested_at,
                                 "status": "requested",
                                 "actor": requested_by,
+                                "actor_roles": requested_by_roles or [],
                             },
                         }
                     )
@@ -206,6 +219,7 @@ def run_once(limit: int = 50, *, entity_id: str | None = None, requested_by: str
                                 "status": provider_result.status,
                                 "failure_reason": provider_result.failure_reason,
                                 "actor": requested_by,
+                                "actor_roles": requested_by_roles or [],
                             },
                         }
                     )
@@ -247,6 +261,7 @@ def run_once(limit: int = 50, *, entity_id: str | None = None, requested_by: str
                                 "accepted_at": _iso_now(),
                                 "status": provider_result.status,
                                 "actor": requested_by,
+                                "actor_roles": requested_by_roles or [],
                             },
                         }
                     )
@@ -276,6 +291,7 @@ def run_once(limit: int = 50, *, entity_id: str | None = None, requested_by: str
                             "provider_name": provider_result.provider_name,
                             "provider_message_id": provider_result.provider_message_id,
                             "actor": requested_by,
+                            "actor_roles": requested_by_roles or [],
                         },
                     }
                 )

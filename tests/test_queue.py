@@ -14,8 +14,13 @@ def _client_with_temp_ledger(tmp_path, monkeypatch) -> TestClient:
     monkeypatch.setattr(settings, "LEDGER_BACKEND", "file")
     monkeypatch.setattr(settings, "ENV", "dev")
     monkeypatch.setattr(settings, "QUEUE_BACKEND", "memory")
+    monkeypatch.setattr(settings, "ADMIN_API_KEY", "test-admin-key")
     reset_queue_backend()
     return TestClient(create_app())
+
+
+def _admin_headers() -> dict[str, str]:
+    return {"x-admin-api-key": "test-admin-key"}
 
 
 def _append_candidate(entity_id: str, source: str = "manual") -> None:
@@ -108,11 +113,12 @@ def test_queue_enqueue_and_worker_consume(tmp_path, monkeypatch):
     enqueue_response = client.post(
         "/queue/enqueue",
         json={"task_type": "enrichment_run", "metadata": {"limit": 5}},
+        headers=_admin_headers(),
     )
     assert enqueue_response.status_code == 200
     assert enqueue_response.json()["status"] == "enqueued"
 
-    worker_response = client.post("/worker/run-once")
+    worker_response = client.post("/worker/run-once", headers=_admin_headers())
     assert worker_response.status_code == 200
     body = worker_response.json()
     assert body["status"] == "processed"
@@ -164,10 +170,15 @@ def test_queue_endpoint_returns_503_when_redis_is_unavailable(tmp_path, monkeypa
     monkeypatch.setattr(settings, "ENV", "dev")
     monkeypatch.setattr(settings, "QUEUE_BACKEND", "redis")
     monkeypatch.setattr(settings, "REDIS_URL", "redis://127.0.0.1:1/0")
+    monkeypatch.setattr(settings, "ADMIN_API_KEY", "test-admin-key")
     reset_queue_backend()
     client = TestClient(create_app())
 
-    response = client.post("/queue/enqueue", json={"task_type": "sender_run"})
+    response = client.post(
+        "/queue/enqueue",
+        json={"task_type": "sender_run"},
+        headers=_admin_headers(),
+    )
 
     assert response.status_code == 503
     assert response.json()["detail"].startswith("queue_unavailable:")
