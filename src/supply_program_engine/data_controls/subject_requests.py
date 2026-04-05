@@ -61,7 +61,7 @@ def create_subject_request(request: SubjectRequestRecord, correlation_id: str) -
 
 
 def subject_request_states() -> dict[str, dict]:
-    requests: dict[str, dict] = {}
+    request_map: dict[str, dict] = {}
     for rec in ledger.read():
         event_type = rec.get("event_type")
         payload = rec.get("payload") or {}
@@ -69,17 +69,17 @@ def subject_request_states() -> dict[str, dict]:
             request_id = payload.get("request_id")
             if not request_id:
                 continue
-            requests[request_id] = dict(payload)
+            request_map[request_id] = dict(payload)
         elif event_type == EventType.SUBJECT_REQUEST_STATUS_UPDATED.value:
             request_id = payload.get("request_id")
-            if not request_id or request_id not in requests:
+            if not request_id or request_id not in request_map:
                 continue
-            requests[request_id]["status"] = payload.get("status", requests[request_id].get("status"))
-            requests[request_id]["updated_at"] = payload.get("updated_at")
-            requests[request_id]["updated_by"] = payload.get("actor")
+            request_map[request_id]["status"] = payload.get("status", request_map[request_id].get("status"))
+            request_map[request_id]["updated_at"] = payload.get("updated_at")
+            request_map[request_id]["updated_by"] = payload.get("actor")
             if payload.get("notes"):
-                requests[request_id]["notes"] = payload.get("notes")
-    return requests
+                request_map[request_id]["notes"] = payload.get("notes")
+    return request_map
 
 
 def subject_requests_for_entity(entity: PipelineEntityView) -> list[dict]:
@@ -108,8 +108,8 @@ def subject_requests_for_entity(entity: PipelineEntityView) -> list[dict]:
 
 
 def update_subject_request_status(update: SubjectRequestStatusUpdate, correlation_id: str) -> dict[str, object]:
-    requests = subject_request_states()
-    request = requests.get(update.request_id)
+    request_map = subject_request_states()
+    request = request_map.get(update.request_id)
     if request is None:
         raise ValueError("subject_request_not_found")
 

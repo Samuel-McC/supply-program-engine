@@ -14,8 +14,11 @@ def _is_active(payload: dict, at: str | None = None) -> bool:
     expires_at = parse_iso(payload.get("expires_at"))
     if expires_at is None:
         return True
-    compare_at = parse_iso(at) if at else parse_iso(iso_now())
-    assert compare_at is not None
+    compare_at = parse_iso(at) if at else None
+    if compare_at is None:
+        compare_at = parse_iso(iso_now())
+    if compare_at is None:
+        return True
     return expires_at > compare_at
 
 

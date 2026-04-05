@@ -55,7 +55,8 @@ def run_once(limit: int = 50) -> dict:
         elif received_at is not None:
             retention_cutoff = received_at + timedelta(days=settings.REPLY_TEXT_RETENTION_DAYS)
             compare_at = parse_iso(iso_now())
-            assert compare_at is not None
+            if compare_at is None:
+                continue
             if compare_at >= retention_cutoff:
                 reason = "retention_window_elapsed"
 

@@ -26,7 +26,7 @@ class Settings(BaseModel):
     SESSION_COOKIE_SAMESITE: str = os.getenv("SESSION_COOKIE_SAMESITE", "lax")
     OPERATOR_USERS_JSON: str = os.getenv("OPERATOR_USERS_JSON", "")
 
-    HOST: str = os.getenv("HOST", "0.0.0.0") # nosec B104
+    HOST: str = os.getenv("HOST", "0.0.0.0")
     PORT: int = int(os.getenv("PORT", "8000"))
 
     GOOGLE_PLACES_API_KEY: str | None = os.getenv("GOOGLE_PLACES_API_KEY")
