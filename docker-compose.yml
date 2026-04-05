@@ -20,6 +20,7 @@ services:
       context: .
       dockerfile: Dockerfile
     environment:
+      HOST: 0.0.0.0
       LEDGER_BACKEND: db
       DATABASE_URL: postgresql+psycopg://spe:spe_password@db:5432/spe
       QUEUE_BACKEND: sync
