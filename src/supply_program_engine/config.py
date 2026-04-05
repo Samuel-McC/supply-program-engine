@@ -15,6 +15,16 @@ class Settings(BaseModel):
 
     HMAC_SECRET: str = os.getenv("HMAC_SECRET", "dev-secret")
     ADMIN_API_KEY: str | None = os.getenv("ADMIN_API_KEY")
+    SESSION_SECRET: str = os.getenv("SESSION_SECRET", os.getenv("HMAC_SECRET", "dev-secret"))
+    SESSION_COOKIE_NAME: str = os.getenv("SESSION_COOKIE_NAME", "spe_operator_session")
+    SESSION_TTL_SECONDS: int = int(os.getenv("SESSION_TTL_SECONDS", "28800"))
+    SESSION_COOKIE_HTTPONLY: bool = os.getenv("SESSION_COOKIE_HTTPONLY", "true").lower() == "true"
+    SESSION_COOKIE_SECURE: bool = os.getenv(
+        "SESSION_COOKIE_SECURE",
+        "false" if os.getenv("ENV", "dev") == "dev" else "true",
+    ).lower() == "true"
+    SESSION_COOKIE_SAMESITE: str = os.getenv("SESSION_COOKIE_SAMESITE", "lax")
+    OPERATOR_USERS_JSON: str = os.getenv("OPERATOR_USERS_JSON", "")
 
     HOST: str = os.getenv("HOST", "0.0.0.0") # nosec B104
     PORT: int = int(os.getenv("PORT", "8000"))

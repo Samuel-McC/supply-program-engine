@@ -1,3 +1,5 @@
+import re
+
 from fastapi.testclient import TestClient
 
 from supply_program_engine import ledger
@@ -6,11 +8,27 @@ from supply_program_engine.config import settings
 from supply_program_engine.models import EventType
 
 
-def _client_with_temp_ledger(tmp_path, monkeypatch) -> TestClient:
+def _client_with_temp_ledger(tmp_path, monkeypatch, *, login: bool = True) -> TestClient:
     monkeypatch.setattr(settings, "LEDGER_PATH", str(tmp_path / "ledger.jsonl"))
     monkeypatch.setattr(settings, "LEDGER_BACKEND", "file")
     monkeypatch.setattr(settings, "ENV", "dev")
-    return TestClient(create_app())
+    monkeypatch.setattr(settings, "SESSION_SECRET", "test-session-secret")
+    monkeypatch.setattr(settings, "SESSION_COOKIE_SECURE", False)
+    client = TestClient(create_app())
+    if login:
+        response = client.post(
+            "/login",
+            data={"username": "demo-admin", "password": "dev-password", "next": "/ui/candidates"},
+            follow_redirects=False,
+        )
+        assert response.status_code == 303
+    return client
+
+
+def _extract_csrf_token(body: str) -> str:
+    match = re.search(r'name="csrf_token" value="([^"]+)"', body)
+    assert match is not None
+    return match.group(1)
 
 
 def _seed_candidate(entity_id: str = "entity-1") -> None:

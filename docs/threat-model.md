@@ -32,12 +32,15 @@ Implemented today:
 
 - non-dev admin/API write routes can require `ADMIN_API_KEY`
 - candidate ingress uses HMAC validation outside dev
+- the operator UI now requires authenticated signed sessions
+- authenticated UI form posts require CSRF tokens
+- bounded role gates now protect metrics, approval, and send actions
 - administrative state changes are written to the append-only ledger
 
 Residual risk:
 
-- the operator UI does not yet enforce authentication or RBAC
-- shared-key admin protection is weaker than user-scoped authorization
+- deeper authorization/RBAC is still limited to a small role model
+- shared-key admin protection remains in use for non-UI/internal endpoints
 
 ### Duplicate or repeated outbound sending
 
@@ -70,7 +73,7 @@ Implemented today:
 
 Residual risk:
 
-- there is not yet authenticated operator identity or approval routing around suppression changes
+- suppression changes still rely on the current bounded internal operator model rather than deeper approval routing or separation-of-duties controls
 
 ### Privacy-sensitive reply content persisting too broadly
 

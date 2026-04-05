@@ -6,6 +6,7 @@ import hmac
 import json
 import time
 from typing import Optional
+from urllib.parse import quote
 
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse
@@ -15,6 +16,16 @@ from fastapi import Form
 from fastapi.responses import RedirectResponse
 
 from supply_program_engine import ledger
+from supply_program_engine.auth import (
+    authenticate_operator,
+    clear_session_cookie,
+    create_session_principal,
+    issue_csrf_token,
+    load_session_from_request,
+    set_session_cookie,
+    verify_csrf_token,
+)
+from supply_program_engine.auth.models import SessionPrincipal
 from supply_program_engine.config import settings
 from supply_program_engine.data_controls import (
     build_entity_export,
@@ -50,7 +61,20 @@ templates = Jinja2Templates(directory="src/supply_program_engine/templates")
 
 
 def _template_response(request: Request, name: str, **context: object) -> HTMLResponse:
-    return templates.TemplateResponse(request, name, {"request": request, **context})
+    operator = getattr(request.state, "operator", None)
+    return templates.TemplateResponse(
+        request,
+        name,
+        {
+            "request": request,
+            "current_operator": operator,
+            "csrf_token": issue_csrf_token(operator) if operator else None,
+            "operator_can_approve": bool(operator and operator.has_any_role("approver")),
+            "operator_can_send": bool(operator and operator.has_any_role("sender")),
+            "operator_is_admin": bool(operator and operator.has_any_role("admin")),
+            **context,
+        },
+    )
 
 
 def _compute_signature(raw_body: bytes) -> str:
@@ -73,6 +97,53 @@ def _require_admin_api_key(x_admin_api_key: Optional[str]) -> None:
         raise HTTPException(status_code=401, detail="Invalid X-Admin-API-Key")
 
 
+def _safe_next_path(path: str | None) -> str:
+    if not path or not path.startswith("/") or path.startswith("//"):
+        return "/ui/candidates"
+    if path.startswith("/login"):
+        return "/ui/candidates"
+    return path
+
+
+def _current_operator(request: Request) -> SessionPrincipal | None:
+    return getattr(request.state, "operator", None)
+
+
+def _login_redirect(request: Request) -> RedirectResponse:
+    next_path = request.url.path
+    if request.url.query:
+        next_path = f"{next_path}?{request.url.query}"
+    safe_next = _safe_next_path(next_path)
+    return RedirectResponse(url=f"/login?next={quote(safe_next, safe='/?=&')}", status_code=303)
+
+
+def _require_ui_operator(request: Request, *roles: str) -> SessionPrincipal | RedirectResponse:
+    operator = _current_operator(request)
+    if operator is None:
+        return _login_redirect(request)
+    if roles and not operator.has_any_role(*roles):
+        raise HTTPException(status_code=403, detail="insufficient_role")
+    return operator
+
+
+def _require_json_operator(request: Request, *roles: str) -> SessionPrincipal:
+    operator = _current_operator(request)
+    if operator is None:
+        raise HTTPException(status_code=401, detail="authentication_required")
+    if roles and not operator.has_any_role(*roles):
+        raise HTTPException(status_code=403, detail="insufficient_role")
+    return operator
+
+
+def _require_csrf(request: Request, csrf_token: str) -> SessionPrincipal:
+    operator = _current_operator(request)
+    if operator is None:
+        raise HTTPException(status_code=401, detail="authentication_required")
+    if not verify_csrf_token(csrf_token, operator):
+        raise HTTPException(status_code=403, detail="invalid_csrf_token")
+    return operator
+
+
 def create_app() -> FastAPI:
     initialize_tracing()
     app = FastAPI(title=settings.APP_NAME)
@@ -81,6 +152,7 @@ def create_app() -> FastAPI:
     async def observability_middleware(request: Request, call_next):
         cid = request.headers.get("x-correlation-id") or generate_correlation_id()
         request.state.correlation_id = cid
+        request.state.operator = load_session_from_request(request)
 
         start = time.time()
         response = await call_next(request)
@@ -125,6 +197,46 @@ def create_app() -> FastAPI:
     @app.get("/metrics")
     async def metrics():
         return snapshot()
+
+    @app.get("/login", response_class=HTMLResponse)
+    async def login_page(request: Request, next: str | None = None):
+        operator = _current_operator(request)
+        destination = _safe_next_path(next)
+        if operator is not None:
+            return RedirectResponse(url=destination, status_code=303)
+        return _template_response(request, "login.html", next_path=destination, error=None)
+
+    @app.post("/login", response_class=HTMLResponse)
+    async def login_submit(
+        request: Request,
+        username: str = Form(...),
+        password: str = Form(...),
+        next: str = Form("/ui/candidates"),
+    ):
+        destination = _safe_next_path(next)
+        user = authenticate_operator(username, password)
+        if user is None:
+            response = _template_response(
+                request,
+                "login.html",
+                next_path=destination,
+                error="Invalid username or password.",
+            )
+            response.status_code = 401
+            return response
+
+        principal = create_session_principal(user)
+        response = RedirectResponse(url=destination, status_code=303)
+        set_session_cookie(response, principal)
+        log.info("operator_login_succeeded", extra={"username": principal.username})
+        return response
+
+    @app.post("/logout")
+    async def logout(request: Request, csrf_token: str = Form("")):
+        _require_csrf(request, csrf_token)
+        response = RedirectResponse(url="/login", status_code=303)
+        clear_session_cookie(response)
+        return response
 
     @app.post("/ingress/candidate")
     async def ingest_candidate(
@@ -523,6 +635,7 @@ def create_app() -> FastAPI:
 
     @app.get("/pipeline")
     async def get_pipeline(request: Request):
+        _require_json_operator(request)
         cid = getattr(request.state, "correlation_id", generate_correlation_id())
         state = build_pipeline_state()
         ranked = rank_pipeline(list(state.values()))
@@ -531,6 +644,7 @@ def create_app() -> FastAPI:
 
     @app.get("/entity/{entity_id}")
     async def get_entity(entity_id: str, request: Request):
+        _require_json_operator(request)
         cid = getattr(request.state, "correlation_id", generate_correlation_id())
         events = sanitized_entity_timeline(entity_id)
         if not events:
@@ -539,6 +653,9 @@ def create_app() -> FastAPI:
 
     @app.get("/ui/candidates", response_class=HTMLResponse)
     async def ui_candidates(request: Request):
+        gate = _require_ui_operator(request)
+        if isinstance(gate, RedirectResponse):
+            return gate
         state = build_pipeline_state()
         ranked = rank_pipeline(list(state.values()))
 
@@ -554,6 +671,9 @@ def create_app() -> FastAPI:
 
     @app.get("/ui/candidates/table", response_class=HTMLResponse)
     async def ui_candidates_table(request: Request):
+        gate = _require_ui_operator(request)
+        if isinstance(gate, RedirectResponse):
+            return gate
         state = build_pipeline_state()
         ranked = rank_pipeline(list(state.values()))
 
@@ -561,6 +681,9 @@ def create_app() -> FastAPI:
 
     @app.get("/ui/discovery", response_class=HTMLResponse)
     async def ui_discovery(request: Request):
+        gate = _require_ui_operator(request)
+        if isinstance(gate, RedirectResponse):
+            return gate
         state = build_pipeline_state()
         discovered = [
             view
@@ -592,11 +715,17 @@ def create_app() -> FastAPI:
 
     @app.get("/ui/metrics", response_class=HTMLResponse)
     async def ui_metrics(request: Request):
+        gate = _require_ui_operator(request, "admin")
+        if isinstance(gate, RedirectResponse):
+            return gate
         events = list(ledger.read())
         return _template_response(request, "metrics.html", total_events=len(events), metrics=snapshot())
 
     @app.get("/ui/entity/{entity_id}", response_class=HTMLResponse)
     async def ui_entity_detail(request: Request, entity_id: str):
+        gate = _require_ui_operator(request)
+        if isinstance(gate, RedirectResponse):
+            return gate
         state = build_pipeline_state()
         entity = state.get(entity_id)
 
@@ -609,10 +738,15 @@ def create_app() -> FastAPI:
 
     @app.post("/ui/entity/{entity_id}/approve")
     async def ui_entity_approve(
+        request: Request,
         entity_id: str,
-        actor: str = Form(...),
         reason: str = Form(...),
+        csrf_token: str = Form(""),
     ):
+        gate = _require_ui_operator(request, "approver")
+        if isinstance(gate, RedirectResponse):
+            return gate
+        operator = _require_csrf(request, csrf_token)
         state = build_pipeline_state()
         entity = state.get(entity_id)
 
@@ -628,7 +762,7 @@ def create_app() -> FastAPI:
         decision = ApprovalDecision(
             draft_id=entity.draft_id,
             decision="approved",
-            actor=actor,
+            actor=operator.username,
             reason=reason,
         )
 
@@ -679,10 +813,15 @@ def create_app() -> FastAPI:
 
     @app.post("/ui/entity/{entity_id}/reject")
     async def ui_entity_reject(
+        request: Request,
         entity_id: str,
-        actor: str = Form(...),
         reason: str = Form(...),
+        csrf_token: str = Form(""),
     ):
+        gate = _require_ui_operator(request, "approver")
+        if isinstance(gate, RedirectResponse):
+            return gate
+        operator = _require_csrf(request, csrf_token)
         state = build_pipeline_state()
         entity = state.get(entity_id)
 
@@ -698,7 +837,7 @@ def create_app() -> FastAPI:
         decision = ApprovalDecision(
             draft_id=entity.draft_id,
             decision="rejected",
-            actor=actor,
+            actor=operator.username,
             reason=reason,
         )
 
@@ -727,9 +866,14 @@ def create_app() -> FastAPI:
 
     @app.post("/ui/entity/{entity_id}/send-now")
     async def ui_entity_send_now(
+        request: Request,
         entity_id: str,
-        actor: str = Form(...),
+        csrf_token: str = Form(""),
     ):
+        gate = _require_ui_operator(request, "sender")
+        if isinstance(gate, RedirectResponse):
+            return gate
+        operator = _require_csrf(request, csrf_token)
         state = build_pipeline_state()
         entity = state.get(entity_id)
 
@@ -739,7 +883,7 @@ def create_app() -> FastAPI:
         if entity.status != "outbox_ready":
             raise HTTPException(status_code=400, detail="Entity is not ready to send")
 
-        sender_run_once(limit=50)
+        sender_run_once(limit=1, entity_id=entity_id, requested_by=operator.username)
 
         return RedirectResponse(url=f"/ui/entity/{entity_id}", status_code=303)
 

@@ -464,17 +464,14 @@
         <div class="bg-white rounded-xl shadow-sm border p-6">
             <h3 class="text-lg font-semibold text-slate-900 mb-4">Operator Actions</h3>
 
-            {% if entity.draft_id and entity.status in ["draft_created", "rejected"] %}
+            {% if entity.draft_id and entity.status in ["draft_created", "rejected"] and operator_can_approve %}
             <form method="post" action="/ui/entity/{{ entity.entity_id }}/approve" class="space-y-3 mb-6">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 <div>
-                    <label class="block text-sm font-medium text-slate-700">Actor</label>
-                    <input
-                        type="text"
-                        name="actor"
-                        value="operator@example.internal"
-                        class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                        required
-                    >
+                    <div class="text-xs uppercase tracking-wide text-slate-500">Authenticated Actor</div>
+                    <div class="mt-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                        {{ current_operator.username }}
+                    </div>
                 </div>
 
                 <div>
@@ -496,15 +493,12 @@
             </form>
 
             <form method="post" action="/ui/entity/{{ entity.entity_id }}/reject" class="space-y-3">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 <div>
-                    <label class="block text-sm font-medium text-slate-700">Actor</label>
-                    <input
-                        type="text"
-                        name="actor"
-                        value="operator@example.internal"
-                        class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                        required
-                    >
+                    <div class="text-xs uppercase tracking-wide text-slate-500">Authenticated Actor</div>
+                    <div class="mt-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                        {{ current_operator.username }}
+                    </div>
                 </div>
 
                 <div>
@@ -524,17 +518,14 @@
                     Reject Draft
                 </button>
             </form>
-            {% elif entity.status == "outbox_ready" %}
+            {% elif entity.status == "outbox_ready" and operator_can_send %}
             <form method="post" action="/ui/entity/{{ entity.entity_id }}/send-now" class="space-y-3">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 <div>
-                    <label class="block text-sm font-medium text-slate-700">Actor</label>
-                    <input
-                        type="text"
-                        name="actor"
-                        value="operator@example.internal"
-                        class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                        required
-                    >
+                    <div class="text-xs uppercase tracking-wide text-slate-500">Authenticated Actor</div>
+                    <div class="mt-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                        {{ current_operator.username }}
+                    </div>
                 </div>
 
                 <button
@@ -552,6 +543,10 @@
                 <div class="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3">
                     <p class="text-sm text-amber-800 font-medium">Send blocked until policy conditions are resolved.</p>
                 </div>
+            {% elif entity.draft_id and entity.status in ["draft_created", "rejected"] %}
+                <p class="text-sm text-slate-500">Your current role cannot approve or reject drafts.</p>
+            {% elif entity.status == "outbox_ready" %}
+                <p class="text-sm text-slate-500">Your current role cannot send messages.</p>
             {% else %}
                 <p class="text-sm text-slate-500">No action currently available.</p>
             {% endif %}

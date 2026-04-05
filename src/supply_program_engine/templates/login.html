@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="max-w-md mx-auto">
+    <div class="bg-white rounded-2xl shadow-sm border p-8">
+        <h2 class="text-2xl font-bold text-slate-900">Operator Login</h2>
+        <p class="mt-2 text-sm text-slate-500">Sign in to access the protected operator console.</p>
+
+        {% if error %}
+        <div class="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {{ error }}
+        </div>
+        {% endif %}
+
+        <form method="post" action="/login" class="mt-6 space-y-4">
+            <input type="hidden" name="next" value="{{ next_path }}">
+
+            <div>
+                <label class="block text-sm font-medium text-slate-700">Username</label>
+                <input
+                    type="text"
+                    name="username"
+                    class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                    autocomplete="username"
+                    required
+                >
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-slate-700">Password</label>
+                <input
+                    type="password"
+                    name="password"
+                    class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                    autocomplete="current-password"
+                    required
+                >
+            </div>
+
+            <button
+                type="submit"
+                class="w-full rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+            >
+                Sign In
+            </button>
+        </form>
+
+        <div class="mt-6 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500">
+            In local `ENV=dev`, the built-in fallback operator is `demo-admin` with password `dev-password` unless `OPERATOR_USERS_JSON` is configured.
+        </div>
+    </div>
+</div>
+{% endblock %}

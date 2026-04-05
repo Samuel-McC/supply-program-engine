@@ -10,10 +10,16 @@ The project is privacy-aware and GDPR-aware, not represented as "GDPR compliant.
 
 - Non-dev admin/API write routes can require `ADMIN_API_KEY`.
 - Candidate ingress uses HMAC validation outside `ENV=dev`.
-- The UI is still an internal/demo operator surface. It does not yet have user
-  authentication, sessions, or RBAC.
-- Actor fields are captured on approvals, subject-request updates, and manual
-  suppressions when the caller provides them.
+- The server-rendered operator UI now requires authenticated operator sessions.
+- Session cookies are signed and configured with explicit `HttpOnly`, `Secure`,
+  `SameSite`, and TTL settings.
+- UI form actions use CSRF tokens tied to the authenticated session.
+- A bounded internal role model now exists for `reviewer`, `approver`,
+  `sender`, and `admin`.
+- Approval and UI-triggered send actions record authenticated actor identity
+  from the session.
+- The UI is still an internal/demo operator surface rather than a full
+  enterprise identity system.
 
 ### Auditability and replay
 
@@ -44,6 +50,15 @@ The project is privacy-aware and GDPR-aware, not represented as "GDPR compliant.
 - Approved/completed objection-to-marketing requests automatically create a
   suppression record that blocks future outreach.
 
+### Operator access controls
+
+- UI routes require authenticated operator sessions.
+- `approver`/`admin` roles can approve or reject drafts.
+- `sender`/`admin` roles can trigger UI send actions.
+- `admin` can access the metrics console.
+- Internal run-once, queue, and data-control API routes continue to use the
+  existing admin-key model rather than browser sessions.
+
 ### Redaction and retention
 
 - Historical ledger events are not mutated in place.
@@ -72,7 +87,7 @@ The project is privacy-aware and GDPR-aware, not represented as "GDPR compliant.
 
 ## Planned Controls
 
-- Real authentication, sessions, and RBAC for operator/admin actions
+- Deeper authorization rules beyond the current bounded role gates
 - Secret manager / KMS integration and credential rotation
 - Formal backup retention/deletion procedures
 - Broader pseudonymisation beyond reply text
