@@ -207,6 +207,8 @@ Phase 27 adds a bounded AI-assisted draft suggestion layer for outreach personal
 - AI suggestions are additive and advisory only
 - approval, suppression, policy, and send gates remain unchanged
 - no AI output can approve or send on its own
+- the default local/test provider remains `mock`
+- a real OpenAI-backed provider is available when `AI_PROVIDER=openai` and `OPENAI_API_KEY` is set
 
 
 ## Local quickstart

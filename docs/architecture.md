@@ -153,6 +153,8 @@ It consumes bounded context such as:
 
 The current provider abstraction defaults to a local-safe mock implementation and is designed for future real LLM backends without turning the platform into a generalized AI orchestration system.
 
+Phase 27B adds a real OpenAI-backed option using the Responses API with schema-constrained structured output. The `mock` provider remains the default local/test fallback, while `openai` can be enabled explicitly through runtime config. Failure to reach the provider or missing credentials emits `ai_draft_generation_failed` and leaves deterministic drafting untouched.
+
 ---
 
 ## Reply Triage

@@ -4,6 +4,7 @@ from supply_program_engine import ledger
 from supply_program_engine.ai.models import AIDraftContext, AIDraftFailure
 from supply_program_engine.ai.prompts import AI_DRAFT_PROMPT_VERSION, build_draft_prompt
 from supply_program_engine.ai.provider import AIProviderError, resolve_provider
+from supply_program_engine.config import settings
 from supply_program_engine.data_controls.models import iso_now
 from supply_program_engine.logging import get_logger
 from supply_program_engine.models import EventType
@@ -190,9 +191,13 @@ def generate_draft_suggestion(entity_id: str, correlation_id: str) -> dict[str, 
         except AIProviderError as exc:
             provider_name = "unavailable"
             model_name = "unavailable"
+            if settings.AI_PROVIDER:
+                provider_name = settings.AI_PROVIDER
+            if settings.AI_MODEL:
+                model_name = settings.AI_MODEL
             if exc.args and isinstance(exc.args[0], str) and exc.args[0].startswith("unsupported_provider:"):
                 provider_name = exc.args[0].split(":", 1)[1]
-                model_name = provider_name
+                model_name = settings.AI_MODEL or provider_name
             failure = AIDraftFailure(
                 provider_name=provider_name,
                 model_name=model_name,
