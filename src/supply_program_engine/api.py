@@ -17,6 +17,7 @@ from fastapi import Form
 from fastapi.responses import RedirectResponse
 
 from supply_program_engine import ledger
+from supply_program_engine.ai import generate_draft_suggestion
 from supply_program_engine.auth import (
     authenticate_operator,
     can_approve,
@@ -374,6 +375,29 @@ def create_app() -> FastAPI:
         with trace_span("api.outbound_run_once", correlation_id=cid, task_type="outbound_draft_run", extra={"limit": limit}):
             result = outbound_run_once(limit=limit)
         log.info("outbound_run_once", extra={"correlation_id": cid, **result})
+        return {"correlation_id": cid, **result}
+
+    @app.post("/ai/drafts/suggest/{entity_id}")
+    async def ai_drafts_suggest(
+        entity_id: str,
+        request: Request,
+        x_admin_api_key: Optional[str] = Header(default=None),
+    ):
+        _require_internal_access(request, x_admin_api_key, can_run_admin_actions)
+        cid = getattr(request.state, "correlation_id", generate_correlation_id())
+        with trace_span(
+            "api.ai_drafts_suggest",
+            correlation_id=cid,
+            entity_id=entity_id,
+            task_type="ai_draft_suggestion",
+        ):
+            try:
+                result = generate_draft_suggestion(entity_id=entity_id, correlation_id=cid)
+            except ValueError as exc:
+                if str(exc) == "entity_not_found":
+                    raise HTTPException(status_code=404, detail="Entity not found")
+                raise HTTPException(status_code=400, detail=str(exc))
+        log.info("ai_drafts_suggest", extra={"correlation_id": cid, "entity_id": entity_id, **result})
         return {"correlation_id": cid, **result}
 
     @app.post("/sender/run-once")

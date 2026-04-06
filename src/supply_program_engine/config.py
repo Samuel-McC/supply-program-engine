@@ -45,6 +45,10 @@ class Settings(BaseModel):
     OUTBOUND_FROM_NAME: str = os.getenv("OUTBOUND_FROM_NAME", "Supply Program")
     OUTBOUND_REPLY_TO_EMAIL: str | None = os.getenv("OUTBOUND_REPLY_TO_EMAIL")
     OUTBOUND_PROVIDER_API_KEY: str | None = os.getenv("OUTBOUND_PROVIDER_API_KEY")
+    AI_ENABLED: bool = os.getenv("AI_ENABLED", "false").lower() == "true"
+    AI_PROVIDER: str = os.getenv("AI_PROVIDER", "mock")
+    AI_MODEL: str = os.getenv("AI_MODEL", "mock-draft-personalizer-v1")
+    AI_DRAFTS_ENABLED: bool = os.getenv("AI_DRAFTS_ENABLED", "false").lower() == "true"
     SEND_POLICY_RISK_THRESHOLD: int = int(os.getenv("SEND_POLICY_RISK_THRESHOLD", "3"))
     SUPPRESSED_ENTITIES: str = os.getenv("SUPPRESSED_ENTITIES", "")
     SUPPRESSED_DOMAINS: str = os.getenv("SUPPRESSED_DOMAINS", "")

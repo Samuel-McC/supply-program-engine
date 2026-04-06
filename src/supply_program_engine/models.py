@@ -13,6 +13,8 @@ class EventType(str, Enum):
     ENRICHMENT_FAILED = "enrichment_failed"
     QUALIFICATION_COMPUTED = "qualification_computed"
     OUTBOUND_DRAFT_CREATED = "outbound_draft_created"
+    AI_DRAFT_SUGGESTED = "ai_draft_suggested"
+    AI_DRAFT_GENERATION_FAILED = "ai_draft_generation_failed"
     OUTBOUND_APPROVED = "outbound_approved"
     OUTBOUND_REJECTED = "outbound_rejected"
     OUTBOX_READY = "outbox_ready"
@@ -141,6 +143,19 @@ class PipelineEntityView(BaseModel):
     draft_body: Optional[str] = None
     draft_to_hint: Optional[str] = None
     template_version: Optional[str] = None
+    ai_suggestion_present: bool = False
+    ai_suggestion_status: Optional[str] = None
+    ai_source_draft_id: Optional[str] = None
+    ai_provider_name: Optional[str] = None
+    ai_model_name: Optional[str] = None
+    ai_prompt_version: Optional[str] = None
+    ai_generated_at: Optional[str] = None
+    ai_generation_mode: Optional[str] = None
+    ai_suggested_subject: Optional[str] = None
+    ai_suggested_opening: Optional[str] = None
+    ai_suggested_body: Optional[str] = None
+    ai_failure_reason: Optional[str] = None
+    ai_failed_at: Optional[str] = None
 
     approved_by: Optional[str] = None
     rejected_by: Optional[str] = None

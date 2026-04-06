@@ -484,3 +484,57 @@ def test_entity_detail_shows_data_controls_section(tmp_path, monkeypatch):
     assert "erasure / approved" in response.text
     assert "applied" in response.text
     assert "[redacted]" in response.text
+
+
+def test_entity_detail_shows_ai_draft_suggestion_section(tmp_path, monkeypatch):
+    client = _client_with_temp_ledger(tmp_path, monkeypatch)
+    _seed_candidate()
+    ledger.append(
+        {
+            "event_id": "entity-1-draft-ai",
+            "event_type": EventType.OUTBOUND_DRAFT_CREATED.value,
+            "correlation_id": "c1",
+            "entity_id": "entity-1",
+            "payload": {
+                "draft_id": "draft-ai-1",
+                "entity_id": "entity-1",
+                "segment": "industrial_distributor",
+                "subject": "Deterministic subject",
+                "body": "Deterministic body",
+                "template_version": "v2_merge_fields",
+                "generation_mode": "deterministic",
+            },
+        }
+    )
+    ledger.append(
+        {
+            "event_id": "entity-1-ai-suggested",
+            "event_type": EventType.AI_DRAFT_SUGGESTED.value,
+            "correlation_id": "c1",
+            "entity_id": "entity-1",
+            "payload": {
+                "entity_id": "entity-1",
+                "source_draft_id": "draft-ai-1",
+                "source_template_version": "v2_merge_fields",
+                "source_generation_mode": "deterministic",
+                "provider_name": "mock",
+                "model_name": "mock-draft-personalizer-v1",
+                "prompt_version": "ai_draft_personalizer_v1",
+                "generated_at": "2026-04-05T20:00:00+00:00",
+                "suggested_subject": "Acme Panels: tailored panel supply idea",
+                "suggested_opening": "A tailored opening paragraph.",
+                "suggested_body": "Hi Acme Panels,\n\nA tailored opening paragraph.\n\nRegards,\nSupply Program",
+                "generation_mode": "ai_advisory",
+            },
+        }
+    )
+
+    response = client.get("/ui/entity/entity-1")
+
+    assert response.status_code == 200
+    assert "Deterministic Draft" in response.text
+    assert "AI Draft Suggestion" in response.text
+    assert "Advisory only" in response.text
+    assert "Acme Panels: tailored panel supply idea" in response.text
+    assert "mock / mock-draft-personalizer-v1" in response.text
+    assert "ai_draft_personalizer_v1" in response.text

@@ -263,6 +263,73 @@ def test_projection_tracks_reply_triage_state(tmp_path, monkeypatch):
     assert v.marketing_suppression_reason == "unsubscribe"
 
 
+def test_projection_tracks_ai_draft_suggestion_state(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "LEDGER_PATH", str(tmp_path / "ledger.jsonl"))
+    monkeypatch.setattr(settings, "LEDGER_BACKEND", "file")
+
+    ledger.append({
+        "event_id": "ing-ai-1",
+        "event_type": EventType.CANDIDATE_INGESTED.value,
+        "correlation_id": "c1",
+        "entity_id": "e-ai",
+        "payload": {
+            "company_name": "Acme Panels",
+            "website": "https://acme-panels.example",
+            "location": "TX",
+            "source": "mock_directory",
+            "discovered_via": "industrial distributor",
+        },
+    })
+    ledger.append({
+        "event_id": "draft-ai-1",
+        "event_type": EventType.OUTBOUND_DRAFT_CREATED.value,
+        "correlation_id": "c1",
+        "entity_id": "e-ai",
+        "payload": {
+            "draft_id": "draft-ai-1",
+            "entity_id": "e-ai",
+            "segment": "industrial_distributor",
+            "subject": "Deterministic subject",
+            "body": "Deterministic body",
+            "template_version": "v2_merge_fields",
+            "generation_mode": "deterministic",
+        },
+    })
+    ledger.append({
+        "event_id": "ai-suggested-1",
+        "event_type": EventType.AI_DRAFT_SUGGESTED.value,
+        "correlation_id": "c1",
+        "entity_id": "e-ai",
+        "payload": {
+            "entity_id": "e-ai",
+            "source_draft_id": "draft-ai-1",
+            "source_template_version": "v2_merge_fields",
+            "source_generation_mode": "deterministic",
+            "provider_name": "mock",
+            "model_name": "mock-draft-personalizer-v1",
+            "prompt_version": "ai_draft_personalizer_v1",
+            "generated_at": "2026-04-05T20:00:00+00:00",
+            "suggested_subject": "Acme Panels: tailored panel supply idea",
+            "suggested_opening": "A tailored opening paragraph.",
+            "suggested_body": "Hi Acme Panels,\n\nA tailored opening paragraph.\n\nRegards,\nSupply Program",
+            "generation_mode": "ai_advisory",
+        },
+    })
+
+    state = build_pipeline_state()
+    v = state["e-ai"]
+    assert v.draft_subject == "Deterministic subject"
+    assert v.ai_suggestion_present is True
+    assert v.ai_suggestion_status == "suggested"
+    assert v.ai_source_draft_id == "draft-ai-1"
+    assert v.ai_provider_name == "mock"
+    assert v.ai_model_name == "mock-draft-personalizer-v1"
+    assert v.ai_prompt_version == "ai_draft_personalizer_v1"
+    assert v.ai_generated_at == "2026-04-05T20:00:00+00:00"
+    assert v.ai_suggested_subject == "Acme Panels: tailored panel supply idea"
+    assert v.ai_suggested_opening == "A tailored opening paragraph."
+
+
 def test_projection_tracks_data_control_overlays(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "LEDGER_PATH", str(tmp_path / "ledger.jsonl"))
     monkeypatch.setattr(settings, "LEDGER_BACKEND", "file")

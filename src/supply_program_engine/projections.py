@@ -113,6 +113,32 @@ def build_pipeline_state() -> Dict[str, PipelineEntityView]:
             view.template_version = payload.get("template_version", view.template_version)
             view.status = "draft_created"
 
+        elif et == EventType.AI_DRAFT_SUGGESTED.value:
+            view.ai_suggestion_present = True
+            view.ai_suggestion_status = "suggested"
+            view.ai_source_draft_id = payload.get("source_draft_id", view.ai_source_draft_id)
+            view.ai_provider_name = payload.get("provider_name", view.ai_provider_name)
+            view.ai_model_name = payload.get("model_name", view.ai_model_name)
+            view.ai_prompt_version = payload.get("prompt_version", view.ai_prompt_version)
+            view.ai_generated_at = payload.get("generated_at", view.ai_generated_at)
+            view.ai_generation_mode = payload.get("generation_mode", view.ai_generation_mode)
+            view.ai_suggested_subject = payload.get("suggested_subject", view.ai_suggested_subject)
+            view.ai_suggested_opening = payload.get("suggested_opening", view.ai_suggested_opening)
+            view.ai_suggested_body = payload.get("suggested_body", view.ai_suggested_body)
+            view.ai_failure_reason = None
+            view.ai_failed_at = None
+
+        elif et == EventType.AI_DRAFT_GENERATION_FAILED.value:
+            view.ai_suggestion_present = False
+            view.ai_suggestion_status = "failed"
+            view.ai_source_draft_id = payload.get("source_draft_id", view.ai_source_draft_id)
+            view.ai_provider_name = payload.get("provider_name", view.ai_provider_name)
+            view.ai_model_name = payload.get("model_name", view.ai_model_name)
+            view.ai_prompt_version = payload.get("prompt_version", view.ai_prompt_version)
+            view.ai_generation_mode = payload.get("generation_mode", view.ai_generation_mode)
+            view.ai_failure_reason = payload.get("failure_reason", view.ai_failure_reason)
+            view.ai_failed_at = payload.get("failed_at", view.ai_failed_at)
+
         elif et == EventType.OUTBOUND_APPROVED.value:
             view.approved_by = payload.get("actor", view.approved_by)
             view.last_decision_reason = payload.get("reason", view.last_decision_reason)

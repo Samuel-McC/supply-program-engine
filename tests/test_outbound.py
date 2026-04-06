@@ -7,6 +7,8 @@ from supply_program_engine.outbound.orchestrator import run_once
 def test_outbound_creates_draft_once(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "LEDGER_PATH", str(tmp_path / "ledger.jsonl"))
     monkeypatch.setattr(settings, "LEDGER_BACKEND", "file")
+    monkeypatch.setattr(settings, "AI_ENABLED", False)
+    monkeypatch.setattr(settings, "AI_DRAFTS_ENABLED", False)
 
     ledger.append(
         {
@@ -46,6 +48,12 @@ def test_outbound_creates_draft_once(tmp_path, monkeypatch):
     assert drafts[0]["payload"]["generation_mode"] == "deterministic"
     assert drafts[0]["payload"]["subject"]
     assert drafts[0]["payload"]["body"]
+    ai_events = [
+        e
+        for e in events
+        if e.get("event_type") in {EventType.AI_DRAFT_SUGGESTED.value, EventType.AI_DRAFT_GENERATION_FAILED.value}
+    ]
+    assert ai_events == []
 
 
 def test_outbound_uses_enrichment_signals_when_available(tmp_path, monkeypatch):

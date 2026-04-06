@@ -127,6 +127,34 @@ Qualification and outbound drafting may consume completed enrichment signals whe
 
 ---
 
+## AI Draft Suggestions
+
+Phase 27 adds a bounded AI-assisted draft suggestion layer on top of the existing deterministic draft.
+
+The stage is intentionally additive:
+
+- deterministic `outbound_draft_created` remains the primary workflow artifact
+- AI suggestions are advisory only
+- approval, policy, suppression, and send semantics are unchanged
+- AI output is emitted as separate events rather than overwriting deterministic drafts
+
+The stage emits:
+
+- `ai_draft_suggested`
+- `ai_draft_generation_failed`
+
+It consumes bounded context such as:
+
+- company name
+- segment and location
+- discovery/source hints
+- enrichment summary signals
+- the deterministic subject/body draft
+
+The current provider abstraction defaults to a local-safe mock implementation and is designed for future real LLM backends without turning the platform into a generalized AI orchestration system.
+
+---
+
 ## Reply Triage
 
 Inbound replies are ingested through a deterministic reply-triage stage.

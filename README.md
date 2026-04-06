@@ -39,6 +39,7 @@ The goal was to build something that looks and behaves more like a real internal
 - provider-backed send execution
 - reply triage
 - outcome / feedback learning
+- advisory AI draft suggestions
 
 ### Platform capabilities
 - append-only event ledger
@@ -197,6 +198,15 @@ Inbound replies are classified into bounded outcomes and projected back into ent
 ### Queue-backed execution
 
 Background work can be enqueued and executed through a worker runtime while keeping existing synchronous flows intact.
+
+### Advisory AI draft suggestions
+
+Phase 27 adds a bounded AI-assisted draft suggestion layer for outreach personalization.
+
+- deterministic draft generation remains the primary path
+- AI suggestions are additive and advisory only
+- approval, suppression, policy, and send gates remain unchanged
+- no AI output can approve or send on its own
 
 
 ## Local quickstart
