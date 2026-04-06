@@ -67,3 +67,41 @@ class Settings(BaseModel):
 
 
 settings = Settings()
+
+_WEAK_SECRET_VALUES = frozenset({"", "dev-secret", "replace-me", "changeme"})
+
+
+def _is_weak_secret(value: str) -> bool:
+    normalized = value.strip()
+    return normalized.lower() in _WEAK_SECRET_VALUES or len(normalized) < 16
+
+
+def validate_runtime_security() -> None:
+    if settings.ENV == "dev":
+        return
+
+    errors: list[str] = []
+
+    if _is_weak_secret(settings.HMAC_SECRET):
+        errors.append("HMAC_SECRET must be set to a strong non-default value outside dev")
+
+    if _is_weak_secret(settings.SESSION_SECRET):
+        errors.append("SESSION_SECRET must be set to a strong non-default value outside dev")
+
+    if not settings.ADMIN_API_KEY and not settings.OPERATOR_USERS_JSON.strip():
+        errors.append("configure ADMIN_API_KEY and/or OPERATOR_USERS_JSON outside dev")
+
+    operator_users_raw = settings.OPERATOR_USERS_JSON.strip()
+    if operator_users_raw:
+        from supply_program_engine.auth.security import load_operator_users
+
+        try:
+            users = load_operator_users()
+        except Exception as exc:
+            errors.append(f"OPERATOR_USERS_JSON is invalid: {exc}")
+        else:
+            if not users:
+                errors.append("OPERATOR_USERS_JSON must define at least one operator user outside dev")
+
+    if errors:
+        raise RuntimeError("Insecure runtime configuration: " + "; ".join(errors))

@@ -39,6 +39,9 @@ def test_ingest_idempotent_dev(monkeypatch, tmp_path):
 def test_ingest_requires_signature_outside_dev(monkeypatch, tmp_path):
     monkeypatch.setattr(settings, "LEDGER_PATH", str(tmp_path / "ledger.jsonl"))
     monkeypatch.setattr(settings, "ENV", "prod")  # signature required
+    monkeypatch.setattr(settings, "HMAC_SECRET", "prod-hmac-secret-123456")
+    monkeypatch.setattr(settings, "SESSION_SECRET", "prod-session-secret-123456")
+    monkeypatch.setattr(settings, "ADMIN_API_KEY", "prod-admin-key")
 
     app = create_app()
     client = TestClient(app)

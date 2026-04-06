@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 from supply_program_engine import ledger
 from supply_program_engine.config import settings
 from supply_program_engine.data_controls.models import SuppressionRecord, iso_now, normalize_target_value, parse_iso
@@ -67,9 +69,10 @@ def record_suppression(record: SuppressionRecord, correlation_id: str) -> dict[s
     return {"status": "recorded", "event_id": stored["event_id"], "payload": payload}
 
 
-def list_suppressions() -> list[dict]:
+def list_suppressions(records: Iterable[dict] | None = None) -> list[dict]:
     suppressions: list[dict] = []
-    for rec in ledger.read():
+    source_records = records if records is not None else ledger.read()
+    for rec in source_records:
         if rec.get("event_type") != EventType.SUPPRESSION_RECORDED.value:
             continue
         payload = rec.get("payload") or {}
@@ -90,14 +93,20 @@ def list_suppressions() -> list[dict]:
         )
     return suppressions
 
-
-def active_suppressions_for_entity(entity: PipelineEntityView) -> list[dict]:
-    suppressions: list[dict] = []
+def active_suppressions_for_entity(
+    entity: PipelineEntityView,
+    *,
+    suppressions: list[dict] | None = None,
+    config_entities: set[str] | None = None,
+    config_domains: set[str] | None = None,
+) -> list[dict]:
+    matched_suppressions: list[dict] = []
     seen: set[tuple[object, object, object]] = set()
     domain = normalize_target_value("domain", entity.website) if entity.website else None
     draft_email = normalize_target_value("email", entity.draft_to_hint) if entity.draft_to_hint else None
 
-    for suppression in list_suppressions():
+    registry_suppressions = suppressions if suppressions is not None else list_suppressions()
+    for suppression in registry_suppressions:
         if not _is_active(suppression):
             continue
         target_type = suppression.get("target_type")
@@ -117,11 +126,11 @@ def active_suppressions_for_entity(entity: PipelineEntityView) -> list[dict]:
             if key in seen:
                 continue
             seen.add(key)
-            suppressions.append(suppression)
+            matched_suppressions.append(suppression)
 
-    config_entities = _parse_csv(settings.SUPPRESSED_ENTITIES)
+    config_entities = config_entities if config_entities is not None else _parse_csv(settings.SUPPRESSED_ENTITIES)
     if entity.entity_id.lower() in config_entities or entity.company_name.lower() in config_entities:
-        suppressions.append(
+        matched_suppressions.append(
             {
                 "event_id": None,
                 "target_type": "entity",
@@ -136,9 +145,9 @@ def active_suppressions_for_entity(entity: PipelineEntityView) -> list[dict]:
             }
         )
 
-    config_domains = _parse_csv(settings.SUPPRESSED_DOMAINS)
+    config_domains = config_domains if config_domains is not None else _parse_csv(settings.SUPPRESSED_DOMAINS)
     if domain and domain in config_domains:
-        suppressions.append(
+        matched_suppressions.append(
             {
                 "event_id": None,
                 "target_type": "domain",
@@ -153,4 +162,4 @@ def active_suppressions_for_entity(entity: PipelineEntityView) -> list[dict]:
             }
         )
 
-    return suppressions
+    return matched_suppressions

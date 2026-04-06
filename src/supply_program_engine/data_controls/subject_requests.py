@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 from supply_program_engine import ledger
 from supply_program_engine.data_controls.models import (
     SubjectRequestRecord,
@@ -60,9 +62,10 @@ def create_subject_request(request: SubjectRequestRecord, correlation_id: str) -
     return {"status": "recorded", "request_id": request_id, "event_id": stored["event_id"], "payload": payload}
 
 
-def subject_request_states() -> dict[str, dict]:
+def subject_request_states(records: Iterable[dict] | None = None) -> dict[str, dict]:
     request_map: dict[str, dict] = {}
-    for rec in ledger.read():
+    source_records = records if records is not None else ledger.read()
+    for rec in source_records:
         event_type = rec.get("event_type")
         payload = rec.get("payload") or {}
         if event_type == EventType.SUBJECT_REQUEST_RECORDED.value:
@@ -81,13 +84,17 @@ def subject_request_states() -> dict[str, dict]:
                 request_map[request_id]["notes"] = payload.get("notes")
     return request_map
 
-
-def subject_requests_for_entity(entity: PipelineEntityView) -> list[dict]:
+def subject_requests_for_entity(
+    entity: PipelineEntityView,
+    *,
+    request_states: dict[str, dict] | None = None,
+) -> list[dict]:
     domain = normalize_target_value("domain", entity.website) if entity.website else None
     email = normalize_target_value("email", entity.draft_to_hint) if entity.draft_to_hint else None
     matched: list[dict] = []
     seen: set[str] = set()
-    for request in subject_request_states().values():
+    states = request_states if request_states is not None else subject_request_states()
+    for request in states.values():
         target_type = request.get("target_type")
         target_value = request.get("target_value")
         match = False

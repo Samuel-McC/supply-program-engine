@@ -456,6 +456,89 @@ def test_projection_tracks_data_control_overlays(tmp_path, monkeypatch):
     assert v.active_suppressions[0]["reason"] == "manual_suppression"
 
 
+def test_projection_builds_suppression_and_subject_request_state_once_per_pass(monkeypatch):
+    events = [
+        {
+            "event_id": "candidate-1",
+            "event_type": EventType.CANDIDATE_INGESTED.value,
+            "correlation_id": "c1",
+            "entity_id": "e1",
+            "payload": {
+                "company_name": "Acme Panels",
+                "website": "https://acme-panels.example",
+                "location": "TX",
+                "source": "manual",
+                "discovered_via": "directory",
+            },
+        },
+        {
+            "event_id": "candidate-2",
+            "event_type": EventType.CANDIDATE_INGESTED.value,
+            "correlation_id": "c2",
+            "entity_id": "e2",
+            "payload": {
+                "company_name": "Globex Supply",
+                "website": "https://globex.example",
+                "location": "CA",
+                "source": "manual",
+                "discovered_via": "directory",
+            },
+        },
+        {
+            "event_id": "suppression-1",
+            "event_type": EventType.SUPPRESSION_RECORDED.value,
+            "correlation_id": "c1",
+            "entity_id": "e1",
+            "payload": {
+                "target_type": "entity",
+                "target_value": "e1",
+                "reason": "manual_suppression",
+                "created_at": "2026-04-02T09:05:00+00:00",
+                "expires_at": None,
+                "actor": "ops@example.internal",
+                "source": "internal_admin",
+                "notes": "Do not contact.",
+            },
+        },
+        {
+            "event_id": "subject-request-1",
+            "event_type": EventType.SUBJECT_REQUEST_RECORDED.value,
+            "correlation_id": "c1",
+            "entity_id": "e2",
+            "payload": {
+                "request_id": "sr-1",
+                "request_type": "access_export",
+                "target_type": "entity",
+                "target_value": "e2",
+                "status": "requested",
+                "requested_at": "2026-04-02T09:00:00+00:00",
+                "entity_id": "e2",
+                "actor": "privacy@example.internal",
+                "source": "internal_admin",
+                "notes": "Export request.",
+            },
+        },
+    ]
+    read_calls = 0
+
+    def fake_read(entity_id=None):
+        nonlocal read_calls
+        read_calls += 1
+        for rec in events:
+            if entity_id is None or rec.get("entity_id") == entity_id:
+                yield rec
+
+    monkeypatch.setattr(ledger, "read", fake_read)
+    monkeypatch.setattr(settings, "SUPPRESSED_ENTITIES", "")
+    monkeypatch.setattr(settings, "SUPPRESSED_DOMAINS", "")
+
+    state = build_pipeline_state()
+
+    assert state["e1"].active_suppressions[0]["reason"] == "manual_suppression"
+    assert state["e2"].subject_request_summaries[0]["request_type"] == "access_export"
+    assert read_calls == 4
+
+
 def test_projection_tracks_learning_feedback_state(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "LEDGER_PATH", str(tmp_path / "ledger.jsonl"))
     monkeypatch.setattr(settings, "LEDGER_BACKEND", "file")

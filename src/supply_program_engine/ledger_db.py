@@ -1,12 +1,32 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Iterator, Optional
 
 from sqlalchemy import select
 
 from supply_program_engine.db import get_sessionmaker
 from supply_program_engine.db_models import Event
+
+
+def _iso_timestamp(value: object) -> str | None:
+    if not isinstance(value, datetime):
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.isoformat()
+
+
+def _serialize_event(row: Event) -> dict:
+    return {
+        "event_id": row.event_id,
+        "event_type": row.event_type,
+        "entity_id": row.entity_id,
+        "correlation_id": row.correlation_id,
+        "payload": row.payload,
+        "ts": _iso_timestamp(row.created_at),
+    }
 
 
 def append(event: dict) -> dict:
@@ -21,7 +41,8 @@ def append(event: dict) -> dict:
         )
         session.add(db_event)
         session.commit()
-    return event
+        session.refresh(db_event)
+        return _serialize_event(db_event)
 
 
 def exists(event_id: str) -> bool:
@@ -38,13 +59,7 @@ def get(event_id: str) -> Optional[dict]:
         row = session.execute(stmt).scalar_one_or_none()
         if row is None:
             return None
-        return {
-            "event_id": row.event_id,
-            "event_type": row.event_type,
-            "entity_id": row.entity_id,
-            "correlation_id": row.correlation_id,
-            "payload": row.payload,
-        }
+        return _serialize_event(row)
 
 
 def read(entity_id: Optional[str] = None) -> Iterator[dict]:
@@ -55,10 +70,4 @@ def read(entity_id: Optional[str] = None) -> Iterator[dict]:
             stmt = stmt.where(Event.entity_id == entity_id)
 
         for row in session.execute(stmt).scalars():
-            yield {
-                "event_id": row.event_id,
-                "event_type": row.event_type,
-                "entity_id": row.entity_id,
-                "correlation_id": row.correlation_id,
-                "payload": row.payload,
-            }
+            yield _serialize_event(row)

@@ -4,8 +4,8 @@ from typing import Dict, List
 
 from supply_program_engine import ledger
 from supply_program_engine.data_controls.redaction import redaction_overlays
-from supply_program_engine.data_controls.subject_requests import subject_requests_for_entity
-from supply_program_engine.data_controls.suppression import active_suppressions_for_entity
+from supply_program_engine.data_controls.subject_requests import subject_request_states, subject_requests_for_entity
+from supply_program_engine.data_controls.suppression import active_suppressions_for_entity, list_suppressions
 from supply_program_engine.models import EventType, PipelineEntityView
 
 
@@ -279,6 +279,8 @@ def build_pipeline_state() -> Dict[str, PipelineEntityView]:
                     view.retention_notes.append(reason)
 
     overlays = redaction_overlays()
+    suppression_state = list_suppressions()
+    subject_request_state = subject_request_states()
     for view in state.values():
         if view.last_reply_key and view.last_reply_key in overlays:
             overlay = overlays[view.last_reply_key]
@@ -289,14 +291,14 @@ def build_pipeline_state() -> Dict[str, PipelineEntityView]:
             if note and note not in view.retention_notes:
                 view.retention_notes.append(str(note))
 
-        suppressions = active_suppressions_for_entity(view)
+        suppressions = active_suppressions_for_entity(view, suppressions=suppression_state)
         view.active_suppressions = suppressions
         if suppressions:
             view.marketing_suppressed = True
             if not view.marketing_suppression_reason:
                 view.marketing_suppression_reason = str(suppressions[-1].get("reason"))
 
-        subject_requests = subject_requests_for_entity(view)
+        subject_requests = subject_requests_for_entity(view, request_states=subject_request_state)
         view.subject_request_summaries = subject_requests
         if subject_requests:
             latest = subject_requests[-1]

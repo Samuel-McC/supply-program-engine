@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 from supply_program_engine.data_controls.redaction import sanitized_entity_timeline
-from supply_program_engine.data_controls.subject_requests import subject_requests_for_entity
-from supply_program_engine.data_controls.suppression import active_suppressions_for_entity
 from supply_program_engine.projections import build_pipeline_state
 
 
@@ -27,8 +25,8 @@ def build_entity_export(entity_id: str) -> dict[str, object]:
     return {
         "entity": entity.model_dump(),
         "event_summary": event_summary,
-        "suppression_state": active_suppressions_for_entity(entity),
-        "subject_requests": subject_requests_for_entity(entity),
+        "suppression_state": list(entity.active_suppressions),
+        "subject_requests": list(entity.subject_request_summaries),
         "redaction_state": {
             "reply_text_redacted": entity.reply_text_redacted,
             "reply_text_redacted_at": entity.reply_text_redacted_at,

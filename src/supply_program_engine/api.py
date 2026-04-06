@@ -34,7 +34,7 @@ from supply_program_engine.auth import (
     verify_csrf_token,
 )
 from supply_program_engine.auth.models import SessionPrincipal
-from supply_program_engine.config import settings
+from supply_program_engine.config import settings, validate_runtime_security
 from supply_program_engine.data_controls import (
     build_entity_export,
     create_subject_request,
@@ -188,6 +188,7 @@ def _require_csrf(request: Request, csrf_token: str) -> SessionPrincipal:
 
 
 def create_app() -> FastAPI:
+    validate_runtime_security()
     initialize_tracing()
     app = FastAPI(title=settings.APP_NAME)
 
@@ -238,7 +239,12 @@ def create_app() -> FastAPI:
         return {"status": "ready", "ledger_backend": settings.LEDGER_BACKEND}
 
     @app.get("/metrics")
-    async def metrics():
+    async def metrics(
+        request: Request,
+        x_admin_api_key: Optional[str] = Header(default=None),
+    ):
+        if settings.ENV != "dev":
+            _require_internal_access(request, x_admin_api_key, can_run_admin_actions)
         return snapshot()
 
     @app.get("/login", response_class=HTMLResponse)

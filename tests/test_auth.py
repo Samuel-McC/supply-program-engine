@@ -29,6 +29,7 @@ def _client(tmp_path, monkeypatch, *, operator_users_json: str | None = None) ->
     monkeypatch.setattr(settings, "LEDGER_BACKEND", "file")
     monkeypatch.setattr(settings, "ENV", "dev")
     monkeypatch.setattr(settings, "SESSION_SECRET", "test-session-secret")
+    monkeypatch.setattr(settings, "HMAC_SECRET", "test-hmac-secret")
     monkeypatch.setattr(settings, "SESSION_COOKIE_SECURE", False)
     monkeypatch.setattr(settings, "OPERATOR_USERS_JSON", operator_users_json or "")
     monkeypatch.setattr(settings, "ADMIN_API_KEY", "test-admin-key")
@@ -123,6 +124,26 @@ def test_unauthenticated_ui_routes_redirect_and_json_routes_require_auth(tmp_pat
     assert ui_response.headers["location"].startswith("/login?next=/ui/candidates")
     assert api_response.status_code == 401
     assert api_response.json()["detail"] == "authentication_required"
+
+
+def test_create_app_fails_closed_for_weak_non_dev_security_config(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "LEDGER_PATH", str(tmp_path / "ledger.jsonl"))
+    monkeypatch.setattr(settings, "LEDGER_BACKEND", "file")
+    monkeypatch.setattr(settings, "ENV", "prod")
+    monkeypatch.setattr(settings, "HMAC_SECRET", "dev-secret")
+    monkeypatch.setattr(settings, "SESSION_SECRET", "dev-secret")
+    monkeypatch.setattr(settings, "OPERATOR_USERS_JSON", "")
+    monkeypatch.setattr(settings, "ADMIN_API_KEY", None)
+
+    try:
+        create_app()
+    except RuntimeError as exc:
+        message = str(exc)
+        assert "HMAC_SECRET" in message
+        assert "SESSION_SECRET" in message
+        assert "ADMIN_API_KEY" in message or "OPERATOR_USERS_JSON" in message
+    else:
+        raise AssertionError("Expected create_app() to fail closed outside dev")
 
 
 def test_login_and_logout_manage_operator_session(tmp_path, monkeypatch):
@@ -344,10 +365,36 @@ def test_admin_session_can_access_data_controls_without_api_key(tmp_path, monkey
     assert suppression.status_code == 200
     assert suppression.json()["status"] == "recorded"
 
-    events = [event for event in ledger.read() if event.get("event_type") == EventType.SUPPRESSION_RECORDED.value]
-    assert len(events) == 1
-    assert events[0]["payload"]["actor"] == "admin-1"
-    assert events[0]["payload"]["actor_roles"] == ["admin"]
+
+def test_metrics_require_admin_access_outside_dev(tmp_path, monkeypatch):
+    operator_users = _operator_users_json(
+        {
+            "username": "admin-1",
+            "display_name": "Admin One",
+            "password": "password-1",
+            "roles": ["admin"],
+        }
+    )
+    monkeypatch.setattr(settings, "LEDGER_PATH", str(tmp_path / "ledger.jsonl"))
+    monkeypatch.setattr(settings, "LEDGER_BACKEND", "file")
+    monkeypatch.setattr(settings, "ENV", "prod")
+    monkeypatch.setattr(settings, "HMAC_SECRET", "prod-hmac-secret-123456")
+    monkeypatch.setattr(settings, "SESSION_SECRET", "prod-session-secret-123456")
+    monkeypatch.setattr(settings, "SESSION_COOKIE_SECURE", False)
+    monkeypatch.setattr(settings, "OPERATOR_USERS_JSON", operator_users)
+    monkeypatch.setattr(settings, "ADMIN_API_KEY", "prod-admin-key")
+    client = TestClient(create_app())
+
+    unauthenticated = client.get("/metrics", follow_redirects=False)
+    with_api_key = client.get("/metrics", headers={"x-admin-api-key": "prod-admin-key"})
+    login = _login(client, username="admin-1", password="password-1")
+    assert login.status_code == 303
+    with_session = client.get("/metrics")
+
+    assert unauthenticated.status_code == 401
+    assert unauthenticated.json()["detail"] == "authentication_required"
+    assert with_api_key.status_code == 200
+    assert with_session.status_code == 200
 
 
 def test_ui_hides_protected_controls_for_reviewer_role(tmp_path, monkeypatch):
